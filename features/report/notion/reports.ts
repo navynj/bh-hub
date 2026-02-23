@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import { prisma } from '@/lib/core/prisma';
-import { getTargetPercentagesWithDefaults } from '@/lib/report/targetPercentages';
+import { getTargetPercentagesWithDefaults } from '@/features/report/targetPercentages';
 
 /**
  * Normalize Notion database ID - remove hyphens if present
@@ -194,9 +194,8 @@ export async function createReportInNotion(
     const dateRange = `(${startDateStr} to ${endDateStr})`;
 
     // Resolve target % (COS 30, Payroll 25, Profit 15 when blank) so we always save to Notion
-    const savedTargetPercentages = getTargetPercentagesWithDefaults(
-      targetPercentages,
-    );
+    const savedTargetPercentages =
+      getTargetPercentagesWithDefaults(targetPercentages);
 
     // Create a page in the Notion database
     const response = await notion.pages.create({
@@ -262,7 +261,9 @@ export async function createReportInNotion(
         Monthly: {
           checkbox: isMonthly || false,
         },
-        'Cost of Sales Target %': { number: savedTargetPercentages.costOfSales },
+        'Cost of Sales Target %': {
+          number: savedTargetPercentages.costOfSales,
+        },
         'Payroll Target %': { number: savedTargetPercentages.payroll },
         'Profit Target %': { number: savedTargetPercentages.profit },
       },

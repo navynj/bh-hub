@@ -7,7 +7,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
 import { FileDown, ExternalLink, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { Report } from '@/lib/report/types';
+import { Report } from '@/features/report/types';
 
 interface ReportTableProps {
   reports: Report[];

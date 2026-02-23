@@ -5,17 +5,17 @@ import {
   attachReferenceCosToBudgets,
   ensureBudgetsForMonth,
   getBudgetsByMonth,
-} from '@/lib/budget';
+} from '@/features/budget';
 import { AppError, GENERIC_ERROR_MESSAGE } from '@/lib/core/errors';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
-import type { QuickBooksApiContext } from '@/lib/budget';
-import type { BudgetDataType } from '@/lib/budget';
+import type { QuickBooksApiContext } from '@/features/budget';
+import type { BudgetDataType } from '@/features/budget';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 type Props = { searchParams: Promise<{ yearMonth?: string }> };
 
-export default async function DashboardPage({ searchParams }: Props) {
+export default async function BudgetPage({ searchParams }: Props) {
   // ===============================
   // Year Month
   // ===============================

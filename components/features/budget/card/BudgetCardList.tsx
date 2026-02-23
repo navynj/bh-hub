@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { BudgetViewProps } from '@/lib/budget';
+import type { BudgetViewProps } from '@/features/budget';
 import { PropsWithChildren, useMemo } from 'react';
 import BudgetCard from './BudgetCard';
 
@@ -41,7 +41,11 @@ const BudgetCardListContent = ({
   // Office/admin: one list ordered by location.createdAt; reconnect from budget.error
   if (isOfficeOrAdmin && budgets.length > 0) {
     return (
-      <div className={cn('grid grid-cols-1 gap-4 min-w-0 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0')}>
+      <div
+        className={cn(
+          'grid grid-cols-1 gap-4 min-w-0 sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0',
+        )}
+      >
         {budgets.map((b) => (
           <BudgetCard
             key={b.id}

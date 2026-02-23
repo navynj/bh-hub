@@ -6,8 +6,8 @@ import {
   ensureBudgetForMonth,
   getBudgetByLocationAndMonth,
   mapBudgetToDataType,
-} from '@/lib/budget';
-import type { QuickBooksApiContext } from '@/lib/budget';
+} from '@/features/budget';
+import type { QuickBooksApiContext } from '@/features/budget';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { prisma } from '@/lib/core/prisma';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';

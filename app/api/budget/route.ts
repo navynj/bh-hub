@@ -9,8 +9,8 @@ import {
   ensureBudgetForMonth,
   getBudgetsByMonth,
   getBudgetByLocationAndMonth,
-} from '@/lib/budget';
-import type { QuickBooksApiContext } from '@/lib/budget';
+} from '@/features/budget';
+import type { QuickBooksApiContext } from '@/features/budget';
 import { toApiErrorResponse } from '@/lib/core/errors';
 import { prisma } from '@/lib/core/prisma';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
@@ -100,7 +100,9 @@ export async function POST(request: NextRequest) {
 
     const yearMonth = body.yearMonth ?? getCurrentYearMonth();
     const locations = body.locationIds?.length
-      ? await prisma.location.findMany({ where: { id: { in: body.locationIds } } })
+      ? await prisma.location.findMany({
+          where: { id: { in: body.locationIds } },
+        })
       : await prisma.location.findMany();
     const ids = locations.map((l) => l.id);
 
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
     );
 
     const created = results
-      .filter((b): b is NonNullable<typeof results[0]> => b != null)
+      .filter((b): b is NonNullable<(typeof results)[0]> => b != null)
       .map((b) => ({
         id: b.id,
         locationId: b.locationId,

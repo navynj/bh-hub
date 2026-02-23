@@ -1,16 +1,12 @@
 import { jsPDF } from 'jspdf';
-import { getTargetPercentagesWithDefaults } from '@/lib/report/targetPercentages';
+import { getTargetPercentagesWithDefaults } from '@/features/report/targetPercentages';
 import { MONTHLY_MODE_CONSTANTS, PERIOD_MODE_CONSTANTS } from './constants';
 import { BaseRenderer, type RenderConfig } from './renderers/BaseRenderer';
 import { MonthlyModeRenderer } from './renderers/MonthlyModeRenderer';
 import { PeriodModeRenderer } from './renderers/PeriodModeRenderer';
 import { parseReportData, parseReportDataMonthly } from './parsers';
 import { extractMonthsFromReportData, isMonthlyMode } from './utils';
-import type {
-  MonthlyReportData,
-  PeriodReportData,
-  ReportData,
-} from './types';
+import type { MonthlyReportData, PeriodReportData, ReportData } from './types';
 
 // ============================================================================
 // PDF GENERATION FUNCTIONS
@@ -55,8 +51,8 @@ export function generatePDFFromReportData(
     doc,
     title,
     locationName,
-      startDate,
-      endDate,
+    startDate,
+    endDate,
     reportBasis: header.ReportBasis,
     pageWidth,
     margin,
@@ -81,11 +77,7 @@ export function generatePDFFromReportData(
     // Monthly mode rendering
     const parsed = parseReportDataMonthly(reportData, months.length);
     const strategy = new MonthlyModeRenderer(months);
-    strategy.render(
-      pdfRenderer,
-      parsed as MonthlyReportData,
-      resolvedTargets,
-    );
+    strategy.render(pdfRenderer, parsed as MonthlyReportData, resolvedTargets);
   } else {
     // Period mode rendering
     const parsed = parseReportData(reportData);

@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 
 type Props = { searchParams: Promise<{ yearMonth?: string }> };
 
-export default async function DashboardPage({ searchParams }: Props) {
+export default async function HomePage() {
   // =================
   // Auth
   // =================

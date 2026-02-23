@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type {
   BudgetCategoryRow,
   BudgetWithLocationAndCategories,
-} from '@/lib/budget';
+} from '@/features/budget';
 import { usePathname, useRouter } from 'next/navigation';
 import React, { useMemo } from 'react';
 import UpdateBudgetButton from './UpdateBudgetButton';
@@ -33,8 +33,13 @@ function deriveDisplayCategories(
   const refList = referenceCosByCategory ?? currentCosByCategory ?? [];
   if (!refList.length) return [];
   const hasBudget = Number.isFinite(totalBudget) && totalBudget > 0;
-  const totalForPercent =
-    hasBudget ? totalBudget : (noReference && Number.isFinite(currentCosTotal) && (currentCosTotal ?? 0) > 0 ? currentCosTotal! : 0);
+  const totalForPercent = hasBudget
+    ? totalBudget
+    : noReference &&
+        Number.isFinite(currentCosTotal) &&
+        (currentCosTotal ?? 0) > 0
+      ? currentCosTotal!
+      : 0;
   const hasPercent = hasBudget || (noReference && totalForPercent > 0);
   return refList.map((ref) => {
     const current = currentMap.get(ref.categoryId);

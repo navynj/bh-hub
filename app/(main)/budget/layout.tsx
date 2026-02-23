@@ -2,7 +2,7 @@ import { BudgetBulkEditDialog } from '@/components/features/budget/dialog/Budget
 import { BudgetSettingsDialog } from '@/components/features/budget/dialog/BudgetSettingsDialog';
 import MonthNav from '@/components/layout/MonthNav';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
-import { getOrCreateBudgetSettings } from '@/lib/budget';
+import { getOrCreateBudgetSettings } from '@/features/budget';
 import { getCurrentYearMonth } from '@/lib/utils';
 import React, { Suspense } from 'react';
 

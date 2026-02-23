@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 import {
   getReportFromNotionById,
   normalizeNotionId,
-} from '@/lib/report/notion/reports';
+} from '@/features/report/notion/reports';
 
 /**
  * GET /api/report/[id]

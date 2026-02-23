@@ -7,7 +7,7 @@ import {
 import {
   createReportInNotion,
   getReportsFromNotion,
-} from '@/lib/report/notion/reports';
+} from '@/features/report/notion/reports';
 import { prisma } from '@/lib/core/prisma';
 
 /**

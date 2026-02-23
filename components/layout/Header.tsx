@@ -14,7 +14,8 @@ const Header = async ({ isOfficeOrAdmin }: HeaderProps) => {
   if (!session?.user) redirect('/auth');
 
   const isActive = session.user.status === 'active';
-  const isOfficeOrAdminFlag = isOfficeOrAdmin ?? getOfficeOrAdmin(session.user.role);
+  const isOfficeOrAdminFlag =
+    isOfficeOrAdmin ?? getOfficeOrAdmin(session.user.role);
 
   return (
     isActive && (
@@ -22,7 +23,7 @@ const Header = async ({ isOfficeOrAdmin }: HeaderProps) => {
         <div className="shrink-0 flex items-center gap-6 md:w-full md:max-w-3xs">
           <div>
             <Link href="/budget">
-              <h1 className="text-xl font-semibold">BH Dashboard</h1>
+              <h1 className="text-xl font-semibold">BH Hub</h1>
             </Link>
             <p className="text-muted-foreground text-sm">
               {session.user.name ?? session.user.email}

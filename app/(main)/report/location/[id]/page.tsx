@@ -1,6 +1,6 @@
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { getConnections } from '@/lib/quickbooks/connections';
-import { getReportsFromNotion } from '@/lib/report/notion/reports';
+import { getReportsFromNotion } from '@/features/report/notion/reports';
 import { ReportFormSection } from '@/components/features/report/ReportFormSection';
 import { ReportTable } from '@/components/features/report/ReportTable';
 

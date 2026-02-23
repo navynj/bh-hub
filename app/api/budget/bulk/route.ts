@@ -8,12 +8,15 @@ import {
   ensureBudgetForMonth,
   getBudgetsByMonth,
   getOrCreateBudgetSettings,
-} from '@/lib/budget';
-import type { QuickBooksApiContext } from '@/lib/budget';
+} from '@/features/budget';
+import type { QuickBooksApiContext } from '@/features/budget';
 import { toApiErrorResponse } from '@/lib/core/errors';
 import { listYearMonthsInRange } from '@/lib/utils';
 
-function streamLine(controller: ReadableStreamDefaultController<Uint8Array>, obj: object) {
+function streamLine(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  obj: object,
+) {
   controller.enqueue(new TextEncoder().encode(JSON.stringify(obj) + '\n'));
 }
 
@@ -37,7 +40,10 @@ export async function POST(request: NextRequest) {
     if ('error' in parsed) return parsed.error;
     const body = parsed.data;
 
-    const yearMonths = listYearMonthsInRange(body.fromYearMonth, body.toYearMonth);
+    const yearMonths = listYearMonthsInRange(
+      body.fromYearMonth,
+      body.toYearMonth,
+    );
     if (yearMonths.length === 0) {
       return NextResponse.json(
         { error: 'Invalid range: from must be before or equal to to' },
@@ -63,10 +69,13 @@ export async function POST(request: NextRequest) {
             for (const budget of budgets) {
               const rate =
                 body.budgetRate ??
-                (budget.budgetRateUsed != null ? budget.budgetRateUsed : defaultRate);
+                (budget.budgetRateUsed != null
+                  ? budget.budgetRateUsed
+                  : defaultRate);
               const period =
                 body.referencePeriodMonths ??
-                (budget.referencePeriodMonthsUsed ?? defaultPeriod);
+                budget.referencePeriodMonthsUsed ??
+                defaultPeriod;
               await ensureBudgetForMonth({
                 locationId: budget.locationId,
                 yearMonth,
@@ -87,7 +96,10 @@ export async function POST(request: NextRequest) {
           }
           streamLine(controller, { type: 'done', updated });
         } catch (err) {
-          streamLine(controller, { type: 'error', error: err instanceof Error ? err.message : 'Bulk update failed' });
+          streamLine(controller, {
+            type: 'error',
+            error: err instanceof Error ? err.message : 'Bulk update failed',
+          });
         } finally {
           controller.close();
         }

@@ -1,5 +1,5 @@
 {
-  "name": "bh-dashboard",
+  "name": "bh-hub",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -27,6 +27,7 @@
     "dotenv": "^17.2.4",
     "intuit-oauth": "^4.2.2",
     "jspdf": "^4.2.0",
+    "lexorank": "^1.0.5",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",

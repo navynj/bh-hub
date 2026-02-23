@@ -4,7 +4,7 @@ import {
   getReportFromNotionById,
   normalizeNotionId,
   extractNotionDatabaseIdFromUrl,
-} from '@/lib/report/notion/reports';
+} from '@/features/report/notion/reports';
 import { Client } from '@notionhq/client';
 import { prisma } from '@/lib/core/prisma';
 
@@ -19,14 +19,14 @@ import { prisma } from '@/lib/core/prisma';
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Authentication required' },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -45,27 +45,25 @@ export async function POST(
     }
 
     if (!report) {
-      return NextResponse.json(
-        { error: 'Report not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
     const notionToken = process.env.NOTION_API_KEY;
     if (!notionToken) {
       return NextResponse.json(
         { error: 'Notion API key not configured' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
     const body = await request.json().catch(() => ({}));
-    let notionDatabaseId = body.notionDatabaseId || process.env.NOTION_DATABASE_ID;
+    let notionDatabaseId =
+      body.notionDatabaseId || process.env.NOTION_DATABASE_ID;
 
     if (!notionDatabaseId) {
       return NextResponse.json(
         { error: 'Notion database ID not provided' },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -74,14 +72,17 @@ export async function POST(
       const extractedId = extractNotionDatabaseIdFromUrl(notionDatabaseId);
       if (!extractedId) {
         return NextResponse.json(
-          { error: 'Invalid Notion URL format. Could not extract database ID.' },
-          { status: 400 }
+          {
+            error: 'Invalid Notion URL format. Could not extract database ID.',
+          },
+          { status: 400 },
         );
       }
       notionDatabaseId = extractedId;
     } else {
       // Normalize the database ID (remove hyphens if present)
-      notionDatabaseId = normalizeNotionId(notionDatabaseId) || notionDatabaseId;
+      notionDatabaseId =
+        normalizeNotionId(notionDatabaseId) || notionDatabaseId;
     }
 
     const notion = new Client({ auth: notionToken });
@@ -136,7 +137,8 @@ export async function POST(
     };
 
     const formattedId = formatNotionId(response.id);
-    const notionUrl = (response as any).url || `https://www.notion.so/${formattedId}`;
+    const notionUrl =
+      (response as any).url || `https://www.notion.so/${formattedId}`;
 
     return NextResponse.json({
       success: true,
@@ -151,7 +153,7 @@ export async function POST(
         error: 'Failed to export report to Notion',
         details: error.message || 'Unknown error',
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ReportTabs } from '@/components/features/report/form/ReportTabs';
 import { MonthlyReportForm } from '@/components/features/report/form/MonthlyReportForm';
 import { PeriodReportForm } from '@/components/features/report/form/PeriodReportForm';
-import type { ReportMode } from '@/lib/report/types';
+import type { ReportMode } from '@/features/report/types';
 
 export interface ReportFormSectionProps {
   locationCode: string;

@@ -21,6 +21,14 @@ const HeaderNav = ({
       <div className="flex items-center gap-2">
         <NavItem href="/budget">Budget</NavItem>
         <NavItem href="/report">Reports</NavItem>
+        {isOfficeOrAdmin && (
+          <>
+            {/* <NavItem href="/cost">Cost</NavItem> */}
+            <NavItem href="/delivery">Delivery</NavItem>
+            {/* <NavItem href="/inventory">Inventory</NavItem> */}
+            {/* <NavItem href="/audit">Audit</NavItem> */}
+          </>
+        )}
       </div>
       {isOfficeOrAdmin && (
         <div className="flex items-center gap-2">

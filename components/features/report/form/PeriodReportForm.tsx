@@ -12,8 +12,8 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { CalendarIcon, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { createReport } from '@/lib/report/createReport';
-import { buildTargetPercentages } from '@/lib/report/targetPercentages';
+import { createReport } from '@/features/report/createReport';
+import { buildTargetPercentages } from '@/features/report/targetPercentages';
 import { ReportTargetInputs } from '@/components/features/report/form/ReportTargetInputs';
 
 export interface PeriodReportFormProps {

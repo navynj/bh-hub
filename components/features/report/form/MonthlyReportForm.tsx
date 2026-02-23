@@ -12,10 +12,10 @@ import {
 import { format, getYear } from 'date-fns';
 import { FileText, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { SelectedMonth } from '@/lib/report/types';
+import { SelectedMonth } from '@/features/report/types';
 import { MONTH_NAMES } from '@/constants/date';
-import { createReport } from '@/lib/report/createReport';
-import { buildTargetPercentages } from '@/lib/report/targetPercentages';
+import { createReport } from '@/features/report/createReport';
+import { buildTargetPercentages } from '@/features/report/targetPercentages';
 import { ReportTargetInputs } from '@/components/features/report/form/ReportTargetInputs';
 
 export interface MonthlyReportFormProps {

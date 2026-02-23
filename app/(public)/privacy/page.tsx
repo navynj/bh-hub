@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | BH Dashboard',
-  description: 'Privacy Policy for BH Dashboard application',
+  title: 'Privacy Policy | BH Hub',
+  description: 'Privacy Policy for BH Hub application',
 };
 
 export default function PrivacyPolicyPage() {
@@ -27,9 +27,9 @@ export default function PrivacyPolicyPage() {
               1. Introduction
             </h2>
             <p className="text-gray-700 mb-4">
-              This Privacy Policy describes how BH Dashboard ("we," "our," or
-              "us") collects, uses, and protects your personal information when
-              you use our Service, including the chart dashboard and PDF P&amp;L
+              This Privacy Policy describes how BH Hub ("we," "our," or "us")
+              collects, uses, and protects your personal information when you
+              use our Service, including the chart dashboard and PDF P&amp;L
               (Profit &amp; Loss) report generation features. By using the
               Service, you agree to the collection and use of information in
               accordance with this policy.
@@ -55,7 +55,9 @@ export default function PrivacyPolicyPage() {
                 Report and dashboard preferences (date ranges, locations,
                 filters used for charts and P&amp;L reports)
               </li>
-              <li>Parameters and settings used when generating PDF P&amp;L reports</li>
+              <li>
+                Parameters and settings used when generating PDF P&amp;L reports
+              </li>
             </ul>
 
             <h3 className="text-xl font-semibold text-gray-800 mb-3 mt-4">
@@ -100,7 +102,9 @@ export default function PrivacyPolicyPage() {
             <ul className="list-disc pl-6 text-gray-700 mb-4 space-y-2">
               <li>Providing, maintaining, and improving the Service</li>
               <li>Rendering and personalizing the chart dashboard</li>
-              <li>Generating PDF P&amp;L reports based on your selected parameters</li>
+              <li>
+                Generating PDF P&amp;L reports based on your selected parameters
+              </li>
               <li>Processing your requests and transactions</li>
               <li>Communicating with you about the Service</li>
               <li>Detecting, preventing, and addressing technical issues</li>

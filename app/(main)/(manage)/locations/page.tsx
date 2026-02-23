@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { LocationsContent } from './LocationsContent';
-import type { RealmWithConnection } from '@/app/api/realm/route';
+import type { RealmWithConnection } from '@/app/api/(public)/realm/route';
 
 type LocationRow = {
   id: string;
@@ -58,10 +58,6 @@ export default async function LocationsPage() {
   const isAdmin = Boolean(realmData.isAdmin);
 
   return (
-    <LocationsContent
-      realms={realms}
-      isAdmin={isAdmin}
-      locations={locations}
-    />
+    <LocationsContent realms={realms} isAdmin={isAdmin} locations={locations} />
   );
 }

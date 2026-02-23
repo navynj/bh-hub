@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'End User License Agreement | BH Dashboard',
-  description: 'End User License Agreement for BH Dashboard application',
+  title: 'End User License Agreement | BH Hub',
+  description: 'End User License Agreement for BH Hub application',
 };
 
 export default function EULAPage() {
@@ -27,7 +27,7 @@ export default function EULAPage() {
               1. Agreement to Terms
             </h2>
             <p className="text-gray-700 mb-4">
-              By accessing or using the BH Dashboard application ("Service"),
+              By accessing or using the BH Hub application ("Service"),
               including its chart dashboard and PDF P&amp;L (Profit &amp; Loss)
               report generation features, you agree to be bound by this End User
               License Agreement ("EULA"). If you do not agree to these terms,
@@ -72,10 +72,9 @@ export default function EULAPage() {
               The Service and its original content, features, and functionality
               (including the chart dashboard and PDF P&amp;L report generation
               tools) are owned by us and are protected by international
-              copyright, trademark, patent, trade secret, and other
-              intellectual property laws. Reports and charts generated using
-              your data remain your data; the software and presentation thereof
-              are our property.
+              copyright, trademark, patent, trade secret, and other intellectual
+              property laws. Reports and charts generated using your data remain
+              your data; the software and presentation thereof are our property.
             </p>
           </section>
 

@@ -7,8 +7,8 @@ import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import {
   getBudgetByLocationAndMonth,
   ensureBudgetForMonth,
-} from '@/lib/budget';
-import type { QuickBooksApiContext } from '@/lib/budget';
+} from '@/features/budget';
+import type { QuickBooksApiContext } from '@/features/budget';
 import { toApiErrorResponse } from '@/lib/core/errors';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
 

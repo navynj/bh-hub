@@ -3,9 +3,9 @@ import { auth } from '@/lib/auth';
 import {
   getReportFromNotionById,
   normalizeNotionId,
-} from '@/lib/report/notion/reports';
-import { generatePDFFromReportData } from '@/lib/report/pdf';
-import type { ReportData } from '@/lib/report/pdf/types';
+} from '@/features/report/notion/reports';
+import { generatePDFFromReportData } from '@/features/report/pdf';
+import type { ReportData } from '@/features/report/pdf/types';
 import {
   withValidTokenForLocation,
   fetchProfitAndLossReportFromQb,
