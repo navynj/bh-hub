@@ -167,7 +167,11 @@ export function ReportTable({
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Generated Reports</h2>
-      <DataTable columns={columns} data={reports} isLoading={isLoading} />
+      <DataTable<Report>
+        columns={columns}
+        data={reports}
+        isFetching={isLoading}
+      />
     </div>
   );
 }

@@ -82,27 +82,27 @@ model Location {
 }
 
 model User {
-  id             String           @id @default(cuid())
-  name           String?
-  email          String?          @unique
-  emailVerified  DateTime?        @map("email_verified")
-  image          String?
-  role           UserRole?        @default(manager)
-  status         UserStatus       @default(pending_onboarding) @map("status")
-  locationId     String?          @map("location_id")
-  permittedById  String?          @map("permitted_by_id")
-  permittedAt    DateTime?        @map("permitted_at")
-  createdAt      DateTime         @default(now()) @map("created_at")
-  updatedAt      DateTime         @updatedAt @map("updated_at")
-  rejectReason   String?          @map("reject_reason")
-  budgetSettings BudgetSettings[] @relation("BudgetSettingsUpdatedBy")
+  id              String            @id @default(cuid())
+  name            String?
+  email           String?           @unique
+  emailVerified   DateTime?         @map("email_verified")
+  image           String?
+  role            UserRole?         @default(manager)
+  status          UserStatus        @default(pending_onboarding) @map("status")
+  locationId      String?           @map("location_id")
+  permittedById   String?           @map("permitted_by_id")
+  permittedAt     DateTime?         @map("permitted_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  rejectReason    String?           @map("reject_reason")
+  budgetSettings  BudgetSettings[]  @relation("BudgetSettingsUpdatedBy")
   costEditHistory CostEditHistory[]
   costMemos       CostMemo[]
-  accounts       Account[]
-  sessions       Session[]
-  location       Location?        @relation(fields: [locationId], references: [id])
-  permittedBy    User?            @relation("UserPermittedBy", fields: [permittedById], references: [id])
-  permittedUsers User[]           @relation("UserPermittedBy")
+  accounts        Account[]
+  sessions        Session[]
+  location        Location?         @relation(fields: [locationId], references: [id])
+  permittedBy     User?             @relation("UserPermittedBy", fields: [permittedById], references: [id])
+  permittedUsers  User[]            @relation("UserPermittedBy")
 
   @@map("users")
   @@schema("public")
@@ -162,22 +162,23 @@ model Budget {
 // COST (from bh-cost-analysis; no Organization)
 // ===============================
 model Cost {
-  id              String            @id @default(cuid())
-  title           String
-  totalCount      Int
-  lossAmount      Float?
-  finalWeight     Float?
-  locked          Boolean           @default(false)
-  ingredients     Ingredient[]
-  packagings      Packaging[]
-  labors          Labor[]
-  others          Other[]
-  prices          Price[]
-  tags            CostTag[]
-  createdAt       DateTime          @default(now()) @db.Timestamptz
-  updatedAt       DateTime          @updatedAt @db.Timestamptz
-  CostEditHistory CostEditHistory[]
-  costMemos       CostMemo[]
+  id               String            @id @default(cuid())
+  title            String
+  totalCount       Int
+  lossAmount       Float?
+  finalWeight      Float?
+  locked           Boolean           @default(false)
+  ingredients      Ingredient[]
+  packagings       Packaging[]
+  labors           Labor[]
+  others           Other[]
+  prices           Price[]
+  tags             CostTag[]
+  createdAt        DateTime          @default(now()) @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @db.Timestamptz
+  CostEditHistory  CostEditHistory[]
+  costMemos        CostMemo[]
+  costTagRelations CostTagRelation[]
 
   @@map("costs")
   @@schema("cost")
@@ -266,23 +267,25 @@ model Price {
   @@schema("cost")
 }
 
-model Tag {
-  id        String     @id @default(cuid())
-  name      String
-  color     String     @default("gray")
-  costs     CostTag[]
-  createdAt DateTime   @default(now()) @db.Timestamptz
-  updatedAt DateTime   @updatedAt @db.Timestamptz
+model CostTag {
+  id               String            @id @default(cuid())
+  name             String
+  color            String            @default("gray")
+  createdAt        DateTime          @default(now()) @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @db.Timestamptz
+  cost             Cost?             @relation(fields: [costId], references: [id])
+  costId           String?
+  costTagRelations CostTagRelation[]
 
   @@map("tags")
   @@schema("cost")
 }
 
-model CostTag {
+model CostTagRelation {
   costId String
   tagId  String
-  Cost   Cost   @relation(fields: [costId], references: [id], onDelete: Cascade)
-  Tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  Cost   Cost    @relation(fields: [costId], references: [id], onDelete: Cascade)
+  Tag    CostTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([costId, tagId])
   @@map("cost_tags")

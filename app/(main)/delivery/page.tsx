@@ -1,5 +1,5 @@
 const DeliveryPage = () => {
-  return <div>DeliveryPage</div>;
+  return <div>Work in progress..</div>;
 };
 
 export default DeliveryPage;

@@ -244,7 +244,7 @@ export default function UsersPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Users</h1>
-      <DataTable columns={columns} data={users} isLoading={loading} />
+      <DataTable<UserRow> columns={columns} data={users} isFetching={loading} />
     </div>
   );
 }

@@ -1,21 +1,13 @@
-import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
-import { Suspense } from 'react';
+import { NavigationProgressProvider } from '@/components/providers/NavigationProgress';
+import { QueryProvider } from '@/components/providers/QueryProvider';
+import { SessionProvider } from '@/components/providers/SessionProvider';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { QueryProvider } from '@/components/providers/QueryProvider';
-import { NavigationProgressProvider } from '@/components/providers/NavigationProgress';
+import type { Metadata } from 'next';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
+import { Suspense } from 'react';
 import './globals.css';
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
 
 export const metadata: Metadata = {
   title: {
@@ -30,11 +22,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const messages = await getMessages();
+
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <Suspense
           fallback={
             <>
@@ -43,14 +35,18 @@ export default async function RootLayout({
             </>
           }
         >
-          <QueryProvider>
-            <TooltipProvider>
-              <NavigationProgressProvider>
-                {children}
-                <Toaster position="top-center" />
-              </NavigationProgressProvider>
-            </TooltipProvider>
-          </QueryProvider>
+          <NextIntlClientProvider messages={messages}>
+            <QueryProvider>
+              <SessionProvider>
+                <TooltipProvider>
+                  <NavigationProgressProvider>
+                    {children}
+                    <Toaster position="top-center" />
+                  </NavigationProgressProvider>
+                </TooltipProvider>
+              </SessionProvider>
+            </QueryProvider>
+          </NextIntlClientProvider>
         </Suspense>
       </body>
     </html>

@@ -70,8 +70,12 @@ export function LocationsContent({
 }: LocationsContentProps) {
   const router = useRouter();
   const [locations, setLocations] = useState<LocationRow[]>(initialLocations);
-  const [realmsWithConnection, setRealmsWithConnection] = useState<RealmWithConnection[]>(initialRealms);
-  const realms: RealmOption[] = realmsWithConnection.map((r) => ({ id: r.id, name: r.name }));
+  const [realmsWithConnection, setRealmsWithConnection] =
+    useState<RealmWithConnection[]>(initialRealms);
+  const realms: RealmOption[] = realmsWithConnection.map((r) => ({
+    id: r.id,
+    name: r.name,
+  }));
 
   useEffect(() => {
     setLocations(initialLocations);
@@ -208,7 +212,11 @@ export function LocationsContent({
           <AddLocationDialog realms={realms} onSuccess={refresh} />
         </div>
       </div>
-      <DataTable columns={columns} data={locations} isLoading={false} />
+      <DataTable<LocationRow>
+        columns={columns}
+        data={locations}
+        isFetching={false}
+      />
     </div>
   );
 }
