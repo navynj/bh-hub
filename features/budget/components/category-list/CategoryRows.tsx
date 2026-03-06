@@ -92,13 +92,19 @@ export function CollapsibleCategoryRow({
   totalBudget?: number;
   actualCosByCategoryId?: Record<string, number>;
 }) {
+  const directAmount = actualCosByCategoryId[category.categoryId];
+  const hasDirectCos = category.categoryId in actualCosByCategoryId;
+  const subSum =
+    subcategories.length > 0
+      ? subcategories.reduce(
+          (s, sub) => s + (actualCosByCategoryId[sub.categoryId] ?? 0),
+          0,
+        )
+      : 0;
   const displayAmount =
-    actualCosByCategoryId[category.categoryId] ?? Number(category.amount);
-  const hasActualCos = category.categoryId in actualCosByCategoryId;
+    hasDirectCos ? (directAmount ?? 0) : (subSum ?? Number(category.amount));
   const displayPercent =
-    totalBudget != null &&
-    totalBudget > 0 &&
-    hasActualCos
+    totalBudget != null && totalBudget > 0
       ? (displayAmount / totalBudget) * 100
       : category.percent;
   return (
@@ -133,6 +139,21 @@ export function CollapsibleCategoryRow({
   );
 }
 
+function sumChildrenCos(
+  children: CategoryTreeNode[],
+  actualCosByCategoryId: Record<string, number>,
+): number {
+  return children.reduce(
+    (s, child) =>
+      s +
+      (actualCosByCategoryId[child.category.categoryId] ?? 0) +
+      (child.children.length > 0
+        ? sumChildrenCos(child.children, actualCosByCategoryId)
+        : 0),
+    0,
+  );
+}
+
 /** Recursive tree row: CollapsibleCategoryRow when node has children, StaticCategoryRow when leaf. */
 export function TreeCategoryRow({
   node,
@@ -146,13 +167,16 @@ export function TreeCategoryRow({
   depth?: number;
 }) {
   const { category, children } = node;
-  const displayAmount =
-    actualCosByCategoryId[category.categoryId] ?? Number(category.amount);
-  const hasActualCos = category.categoryId in actualCosByCategoryId;
+  const hasDirectCos = category.categoryId in actualCosByCategoryId;
+  const childrenSum =
+    children.length > 0
+      ? sumChildrenCos(children, actualCosByCategoryId)
+      : 0;
+  const displayAmount = hasDirectCos
+    ? (actualCosByCategoryId[category.categoryId] ?? 0)
+    : (childrenSum ?? Number(category.amount));
   const displayPercent =
-    totalBudget != null &&
-    totalBudget > 0 &&
-    hasActualCos
+    totalBudget != null && totalBudget > 0
       ? (displayAmount / totalBudget) * 100
       : category.percent;
 

@@ -60,11 +60,9 @@ export function ConfirmDialog({
       <DialogContent showCloseButton={!busy} className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && (
-            <DialogDescription>{description}</DialogDescription>
-          )}
+          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <DialogFooter showCloseButton={false} className="gap-2 sm:gap-0">
+        <DialogFooter showCloseButton={false} className="gap-2">
           {showCancel && (
             <Button
               type="button"

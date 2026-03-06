@@ -19,16 +19,45 @@ export const getTopLevelCategoryIndex = (categoryId: string): number => {
   return path[0] ?? Number.MAX_SAFE_INTEGER;
 };
 
+/** Derive top-level display name from subcategory name (e.g. "MAIN - COS3" → "MAIN"). */
+function topLevelNameFromSub(name: string): string {
+  const i = name.indexOf(' - ');
+  return i > 0 ? name.slice(0, i).trim() : name;
+}
+
 export const getTopLevelCategories = (
   categories: { categoryId: string; name: string; amount: number }[],
 ) => {
-  return [...categories]
-    .filter((c) => isTopLevelCategory(c.categoryId))
-    .sort(
-      (a, b) =>
-        getTopLevelCategoryIndex(a.categoryId) -
-        getTopLevelCategoryIndex(b.categoryId),
-    )
-    .map((c) => ({ category: c.name, cos: c.amount }))
-    .filter((c) => Number.isFinite(c.cos) && c.cos > 0);
+  if (!categories?.length) return [];
+  const byTopIdx = new Map<
+    number,
+    { name: string; cos: number; fromTopLevel: boolean }
+  >();
+  for (const c of categories) {
+    const path = parseCategoryPath(c.categoryId);
+    if (path.length === 0) continue;
+    const topIdx = path[0];
+    const amount = Number.isFinite(c.amount) ? c.amount : 0;
+    const existing = byTopIdx.get(topIdx);
+    if (path.length === 1) {
+      byTopIdx.set(topIdx, {
+        name: c.name,
+        cos: existing ? existing.cos + amount : amount,
+        fromTopLevel: true,
+      });
+    } else {
+      const name =
+        existing?.fromTopLevel
+          ? existing.name
+          : existing?.name ?? topLevelNameFromSub(c.name);
+      byTopIdx.set(topIdx, {
+        name,
+        cos: (existing?.cos ?? 0) + amount,
+        fromTopLevel: existing?.fromTopLevel ?? false,
+      });
+    }
+  }
+  return [...byTopIdx.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, v]) => ({ category: v.name, cos: v.cos }));
 };
