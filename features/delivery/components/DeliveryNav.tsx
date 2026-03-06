@@ -26,6 +26,12 @@ const DeliveryNav = () => {
       >
         Locations
       </Link>
+      <Link
+        href="/delivery/tracking"
+        className={linkClass('/delivery/tracking')}
+      >
+        Tracking
+      </Link>
     </nav>
   );
 };

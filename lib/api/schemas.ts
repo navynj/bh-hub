@@ -329,6 +329,20 @@ export type DeliveryDailySchedulePatchBody = z.infer<
   typeof deliveryDailySchedulePatchSchema
 >;
 
+/** POST /api/delivery/driver-auth/token - exchange Google id_token or auth code for driver JWT */
+export const deliveryDriverAuthTokenPostSchema = z.object({
+  idToken: z.string().optional(),
+  code: z.string().optional(),
+  redirectUri: z.string().optional(),
+  codeVerifier: z.string().optional(),
+}).refine((d) => d.idToken ?? d.code, { message: 'idToken or code is required' });
+
+/** POST /api/delivery/driver/location - driver GPS update */
+export const deliveryDriverLocationPostSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
 /**
  * Parse and validate JSON body. Returns either { data } or { error: NextResponse }.
  * Use: const result = await parseBody(request, schema); if (result.error) return result.error;

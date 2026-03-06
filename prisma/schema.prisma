@@ -375,8 +375,9 @@ model Driver {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  fixedSchedules DriverFixedSchedule[]
-  dailyStops     DailyScheduleStop[]
+  fixedSchedules     DriverFixedSchedule[]
+  dailyStops         DailyScheduleStop[]
+  locationUpdates    DriverLocationUpdate[]
 
   @@map("drivers")
   @@schema("delivery")
@@ -468,5 +469,20 @@ model DailyScheduleTask {
   dailyScheduleStop DailyScheduleStop @relation(fields: [dailyScheduleStopId], references: [id], onDelete: Cascade)
 
   @@map("daily_schedule_tasks")
+  @@schema("delivery")
+}
+
+// GPS updates from driver app for office to see current location and today's route (이동경로)
+model DriverLocationUpdate {
+  id        String   @id @default(cuid())
+  driverId  String   @map("driver_id")
+  lat       Float    @map("lat")
+  lng       Float    @map("lng")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, createdAt])
+  @@map("driver_location_updates")
   @@schema("delivery")
 }
