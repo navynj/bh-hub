@@ -89,6 +89,10 @@ export function getTopLevelCategoriesTopLevelOnly(
 /**
  * Top-level rows for charts: union of current + reference top-level so all COS categories appear.
  * Amount = direct top-level row when API has it; else sum of children (e.g. COS3 = 602 when only subcategory rows exist).
+ *
+ * QuickBooks often omits lines with $0 for a given report. This month’s current COS may not list a category
+ * while the reference-period report still has it (or vice versa). We union by categoryId, so you can see
+ * $0 current for a bucket that only exists in reference — that is intentional for budget structure, not a QB row.
  */
 export function getTopLevelCategoriesForCharts(
   currentCosByCategory: CosCategory[] | undefined,

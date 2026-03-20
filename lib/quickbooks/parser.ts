@@ -27,7 +27,8 @@ function parseAmount(value: unknown): number {
   if (typeof value === 'number' && !Number.isNaN(value)) return value;
   const s = String(value).replace(/,/g, '');
   const n = parseFloat(s);
-  return Number.isNaN(n) ? 0 : Math.abs(n);
+  // Keep sign: credits/contras in COS (e.g. "Freight and delivery - COS" as -188) must reduce totals, not flip positive.
+  return Number.isNaN(n) ? 0 : n;
 }
 
 function findSection(
@@ -98,6 +99,27 @@ function cosNumberFromName(name: string): number | null {
 }
 
 /**
+ * Top-level without "COSn" in the name:
+ * - Must not use qb-${reportIndex}: same line collides with qb-${cosNum-1} when index matches COS6 (qb-5).
+ * - Must not use qb-1000+index only: current vs reference P&L often differ in row order (zeros omitted),
+ *   so the same account gets different ids → duplicate rows with the same display name.
+ * Stable hash of the account name maps to qb-${BASE+slot} so current and reference merge on one id.
+ */
+const NON_COS_TOP_LEVEL_ID_BASE = 2_000_000;
+const NON_COS_TOP_LEVEL_ID_SPAN = 1_000_000;
+
+function stableQbIdForNonCosTopLevelName(name: string): string {
+  let h = 2166136261 >>> 0;
+  const s = name.trim();
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  const slot = h % NON_COS_TOP_LEVEL_ID_SPAN;
+  return `qb-${NON_COS_TOP_LEVEL_ID_BASE + slot}`;
+}
+
+/**
  * Recurse COS section: use raw report structure. Top-level id = qb-${cosNum-1} when name is "COSn"; child id = parentId + "-" + idx so children attach to the correct COS parent (e.g. L3 MAIN COS 6 under COS6 = qb-5-0, not qb-2-0).
  */
 function sectionCosLineItemsRecurse(
@@ -116,7 +138,7 @@ function sectionCosLineItemsRecurse(
       ? `qb-${cosNum - 1}`
       : parentId != null
         ? `${parentId}-${path[path.length - 1] ?? 0}`
-        : `qb-${path.join('-')}`;
+        : stableQbIdForNonCosTopLevelName(name);
   out.push({ id, name, amount: rowTotal(row) });
   const subRows = row?.Rows?.Row;
   if (!Array.isArray(subRows) || subRows.length === 0) return;
