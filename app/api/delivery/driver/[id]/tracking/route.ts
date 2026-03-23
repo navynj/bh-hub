@@ -1,10 +1,12 @@
 /**
  * GET /api/delivery/driver/[id]/tracking?date=YYYY-MM-DD
- * Auth: office/admin (session). Returns driver's current location, today's stops, and GPS path for the day.
+ * Auth: office/admin (session). Returns stops and GPS path only between first-stop arrival and last-stop
+ * arrival; live current location is shown only until the driver arrives at the final stop.
  */
 
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { prisma } from '@/lib/core/prisma';
+import { resolveDriverDisplayName } from '@/lib/delivery/resolve-driver-display-name';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -35,7 +37,11 @@ export async function GET(
 
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
-    select: { id: true, name: true, userId: true },
+    select: {
+      id: true,
+      userId: true,
+      user: { select: { name: true } },
+    },
   });
   if (!driver) {
     return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
@@ -46,7 +52,7 @@ export async function GET(
   const endOfDay = new Date(dateOnly);
   endOfDay.setUTCHours(23, 59, 59, 999);
 
-  const [stops, locationUpdates, currentLocation] = await Promise.all([
+  const [stops, locationUpdates] = await Promise.all([
     prisma.dailyScheduleStop.findMany({
       where: { date: dateOnly, driverId },
       orderBy: { sequence: 'asc' },
@@ -69,24 +75,54 @@ export async function GET(
       orderBy: { createdAt: 'asc' },
       select: { lat: true, lng: true, createdAt: true },
     }),
-    prisma.driverLocationUpdate.findFirst({
-      where: { driverId },
-      orderBy: { createdAt: 'desc' },
-      select: { lat: true, lng: true, createdAt: true },
-    }),
   ]);
 
+  // Tracking window: from first stop arrival until last stop arrival (same calendar day).
+  const firstArrivedAt = stops[0]?.arrivedAt ?? null;
+  const lastArrivedAt =
+    stops.length > 0 ? (stops[stops.length - 1]?.arrivedAt ?? null) : null;
+
+  let pathFiltered = locationUpdates;
+  let currentLocation: {
+    lat: number;
+    lng: number;
+    updatedAt: Date;
+  } | null = null;
+
+  if (!firstArrivedAt) {
+    pathFiltered = [];
+  } else {
+    const endBound = lastArrivedAt ?? endOfDay;
+    pathFiltered = locationUpdates.filter(
+      (p) => p.createdAt >= firstArrivedAt && p.createdAt <= endBound,
+    );
+    if (!lastArrivedAt) {
+      const latest = pathFiltered[pathFiltered.length - 1];
+      currentLocation = latest
+        ? {
+            lat: latest.lat,
+            lng: latest.lng,
+            updatedAt: latest.createdAt,
+          }
+        : null;
+    }
+  }
+
   return NextResponse.json({
-    driver: { id: driver.id, name: driver.name },
+    driver: { id: driver.id, name: driver.user?.name ?? null },
     date: dateStr,
     currentLocation: currentLocation
       ? {
           lat: currentLocation.lat,
           lng: currentLocation.lng,
-          updatedAt: currentLocation.createdAt,
+          updatedAt: currentLocation.updatedAt.toISOString(),
         }
       : null,
     stops,
-    path: locationUpdates.map((p) => ({ lat: p.lat, lng: p.lng, createdAt: p.createdAt })),
+    path: pathFiltered.map((p) => ({
+      lat: p.lat,
+      lng: p.lng,
+      createdAt: p.createdAt,
+    })),
   });
 }

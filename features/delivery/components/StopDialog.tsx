@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 import type {
   DailySchedule,
   Stop,
@@ -274,6 +275,7 @@ export function StopDialog({
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? res.statusText);
       }
+      markHubLocalMutationCommitted();
       toast.success(isAdd ? 'Stop added' : 'Stop updated');
       onSaved();
     } catch (e) {

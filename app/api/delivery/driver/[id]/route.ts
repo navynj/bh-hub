@@ -28,12 +28,9 @@ export async function PATCH(
     return NextResponse.json({ error: 'Driver not found' }, { status: 404 });
   }
 
-  const updateData: { name?: string | null } = {};
-  if (body.name !== undefined) updateData.name = body.name ?? null;
-
   await prisma.driver.update({
     where: { id },
-    data: updateData,
+    data: { user: { update: { name: body.name ?? null } } },
   });
   return NextResponse.json({ ok: true });
 }

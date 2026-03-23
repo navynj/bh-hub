@@ -24,11 +24,23 @@ export async function GET(request: NextRequest) {
       dayOfWeek: true,
       createdAt: true,
       driver: {
-        select: { id: true, userId: true, name: true },
+        select: {
+          id: true,
+          userId: true,
+          user: { select: { name: true } },
+        },
       },
     },
   });
-  return NextResponse.json(list);
+  return NextResponse.json(
+    list.map((row) => ({
+      ...row,
+      driver: {
+        id: row.driver.id,
+        name: row.driver.user?.name ?? null,
+      },
+    })),
+  );
 }
 
 export async function POST(request: NextRequest) {

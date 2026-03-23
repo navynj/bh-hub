@@ -19,6 +19,7 @@ import {
 import { DELETE_STOP_CONFIRM_MESSAGE } from '@/features/delivery/lib/constants';
 import {
   useDeliveryDatePicker,
+  useDeliveryHubRealtime,
   useDeliveryOverviewTracking,
   useDeliverySchedules,
   useStopDialog,
@@ -79,8 +80,16 @@ export default function DeliveryOverviewPage() {
     tracking,
     loadingTracking,
     focusDriverLocationRequest,
+    fetchTracking,
     requestFreshDriverLocation,
   } = useDeliveryOverviewTracking(selectedDriverId, dateStr);
+
+  const refreshHubFromRealtime = useCallback(() => {
+    void fetchData();
+    void fetchTracking(true);
+  }, [fetchData, fetchTracking]);
+
+  useDeliveryHubRealtime(selectedDriverId, dateStr, refreshHubFromRealtime);
 
   const handleDriverChange = useCallback(
     (id: string | null) => {

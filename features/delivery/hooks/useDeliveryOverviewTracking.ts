@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import type { TrackingStop } from '../components/DriverTrackingMap';
 import type { DeliveryOverviewTrackingData } from '../types/delivery-overview';
+
+function trackingWindowStatus(stops: TrackingStop[]): 'empty' | 'before' | 'after' | 'active' {
+  if (!stops.length) return 'empty';
+  const firstArrived = stops[0]?.arrivedAt != null;
+  const lastArrived = stops[stops.length - 1]?.arrivedAt != null;
+  if (!firstArrived) return 'before';
+  if (lastArrived) return 'after';
+  return 'active';
+}
 
 /**
  * Map + “Track current location” state for delivery overview: polling, focus requests, office ping.
@@ -67,6 +77,27 @@ export function useDeliveryOverviewTracking(
     if (!selectedDriverId) return;
     pingPollTimeoutsRef.current.forEach(clearTimeout);
     pingPollTimeoutsRef.current = [];
+
+    // Always refresh from API so stop times (e.g. arrivedAt) match the DB after driver actions elsewhere.
+    const fresh = await fetchTracking(true);
+    const stops = fresh?.stops;
+    const windowStatus = trackingWindowStatus(stops ?? []);
+    if (windowStatus === 'empty') {
+      toast.error('No stops for this date.');
+      return;
+    }
+    if (windowStatus === 'before') {
+      toast.info(
+        'Tracking is available after the driver arrives at the first stop.',
+      );
+      return;
+    }
+    if (windowStatus === 'after') {
+      toast.info(
+        'Tracking is no longer available after the driver reaches the final stop.',
+      );
+      return;
+    }
 
     const res = await fetch(
       `/api/delivery/driver/${selectedDriverId}/request-location`,

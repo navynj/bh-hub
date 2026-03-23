@@ -103,6 +103,8 @@ model User {
   location        Location?         @relation(fields: [locationId], references: [id])
   permittedBy     User?             @relation("UserPermittedBy", fields: [permittedById], references: [id])
   permittedUsers  User[]            @relation("UserPermittedBy")
+  /// delivery.Driver.userId → public.users.id (one driver profile per user)
+  driver          Driver?
 
   @@map("users")
   @@schema("public")
@@ -361,25 +363,25 @@ model DeliveryLocation {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  dailyStops    DailyScheduleStop[]
-  fixedStops    FixedScheduleStop[]
+  dailyStops DailyScheduleStop[]
+  fixedStops FixedScheduleStop[]
 
   @@map("delivery_locations")
   @@schema("delivery")
 }
 
 model Driver {
-  id        String   @id @default(cuid())
-  userId    String   @unique @map("user_id") // User (public) who is this driver
-  name      String?  @map("name") // display name override
+  id                      String    @id @default(cuid())
+  userId                  String    @unique @map("user_id") // User (public) who is this driver
   /// Set when office requests a fresh GPS fix; cleared when the driver app POSTs location.
   locationPingRequestedAt DateTime? @map("location_ping_requested_at") @db.Timestamptz
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
-  fixedSchedules     DriverFixedSchedule[]
-  dailyStops         DailyScheduleStop[]
-  locationUpdates    DriverLocationUpdate[]
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fixedSchedules  DriverFixedSchedule[]
+  dailyStops      DailyScheduleStop[]
+  locationUpdates DriverLocationUpdate[]
 
   @@map("drivers")
   @@schema("delivery")
@@ -393,7 +395,7 @@ model DriverFixedSchedule {
   dayOfWeek Int      @map("day_of_week") // 0-6
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  driver        Driver              @relation(fields: [driverId], references: [id], onDelete: Cascade)
   templateStops FixedScheduleStop[]
 
   @@unique([driverId, dayOfWeek])
@@ -413,8 +415,8 @@ model FixedScheduleStop {
   lng                Float?   @map("lng")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  fixedSchedule DriverFixedSchedule @relation(fields: [fixedScheduleId], references: [id], onDelete: Cascade)
-  deliveryLocation DeliveryLocation? @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
+  fixedSchedule    DriverFixedSchedule @relation(fields: [fixedScheduleId], references: [id], onDelete: Cascade)
+  deliveryLocation DeliveryLocation?   @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
   tasks            FixedScheduleTask[]
 
   @@map("fixed_schedule_stops")
@@ -422,11 +424,11 @@ model FixedScheduleStop {
 }
 
 model FixedScheduleTask {
-  id                   String   @id @default(cuid())
-  fixedScheduleStopId  String   @map("fixed_schedule_stop_id")
-  title                String   @map("title")
-  sequence             Int      @map("sequence")
-  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id                  String   @id @default(cuid())
+  fixedScheduleStopId String   @map("fixed_schedule_stop_id")
+  title               String   @map("title")
+  sequence            Int      @map("sequence")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   fixedScheduleStop FixedScheduleStop @relation(fields: [fixedScheduleStopId], references: [id], onDelete: Cascade)
 
@@ -449,8 +451,8 @@ model DailyScheduleStop {
   departedAt         DateTime? @map("departed_at") @db.Timestamptz
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  driver           Driver             @relation(fields: [driverId], references: [id], onDelete: Cascade)
-  deliveryLocation DeliveryLocation? @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
+  driver           Driver              @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  deliveryLocation DeliveryLocation?   @relation(fields: [deliveryLocationId], references: [id], onDelete: SetNull)
   tasks            DailyScheduleTask[]
 
   @@index([date, driverId])

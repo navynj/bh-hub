@@ -1,4 +1,5 @@
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
+import { emitDeliveryRealtimeEvent } from '@/lib/delivery/emit-delivery-realtime';
 import {
   parseBody,
   deliveryDailyScheduleFromFixedPostSchema,
@@ -95,6 +96,15 @@ export async function POST(request: NextRequest) {
     }
     created.push({ driverId: fixed.driverId });
     existingDriverIds.add(fixed.driverId);
+  }
+
+  for (const row of created) {
+    emitDeliveryRealtimeEvent({
+      type: 'schedule',
+      driverId: row.driverId,
+      date,
+      origin: 'office',
+    });
   }
 
   return NextResponse.json({ created: created.length, schedules: created });

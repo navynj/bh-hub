@@ -15,6 +15,7 @@ import {
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 
 type DeliveryLocationOption = {
   id: string;
@@ -188,6 +189,7 @@ export default function NewDailySchedulePage() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? res.statusText);
       }
+      markHubLocalMutationCommitted();
       const created = await res.json();
       toast.success('Schedule created');
       router.push(`/delivery/daily/${created.id}`);

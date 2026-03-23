@@ -3,6 +3,10 @@
  * Auth: Bearer driver JWT. Sets completedAt = now for the task (if stop belongs to this driver).
  */
 
+import {
+  emitDeliveryRealtimeEvent,
+  scheduleDateToUtcDayString,
+} from '@/lib/delivery/emit-delivery-realtime';
 import { verifyDriverToken } from '@/lib/delivery/driver-auth';
 import { prisma } from '@/lib/core/prisma';
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,7 +27,10 @@ export async function PATCH(
       id: taskId,
       dailyScheduleStop: { driverId: payload.driverId },
     },
-    select: { id: true },
+    select: {
+      id: true,
+      dailyScheduleStop: { select: { driverId: true, date: true } },
+    },
   });
   if (!task) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 });
@@ -33,6 +40,12 @@ export async function PATCH(
     where: { id: taskId },
     data: { completedAt: new Date(), isDismissed: false },
     select: { id: true, completedAt: true, isDismissed: true },
+  });
+  emitDeliveryRealtimeEvent({
+    type: 'driver_status',
+    driverId: task.dailyScheduleStop.driverId,
+    date: scheduleDateToUtcDayString(task.dailyScheduleStop.date),
+    origin: 'driver',
   });
   return NextResponse.json(updated);
 }

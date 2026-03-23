@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/collapsible';
 import { CalendarCheck, ChevronDown, ChevronRight, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 import type { DriverRow } from '../types/delivery-schedule-types';
 
 export function DriverNoScheduleCard({
@@ -45,6 +46,7 @@ export function DriverNoScheduleCard({
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? res.statusText);
       }
+      markHubLocalMutationCommitted();
       await onRefresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed');

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 import { Droppable } from '@/components/ui/drag-and-drop';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -370,6 +371,7 @@ export default function EditDailySchedulePage() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? res.statusText);
       }
+      markHubLocalMutationCommitted();
       toast.success('Schedule updated');
       router.push(`/delivery/daily/${id}`);
     } catch (e) {

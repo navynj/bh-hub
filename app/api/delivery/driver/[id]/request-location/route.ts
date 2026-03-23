@@ -4,6 +4,7 @@
  */
 
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
+import { emitDeliveryRealtimeEvent } from '@/lib/delivery/emit-delivery-realtime';
 import { prisma } from '@/lib/core/prisma';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -31,6 +32,12 @@ export async function POST(
   await prisma.driver.update({
     where: { id: driverId },
     data: { locationPingRequestedAt: new Date() },
+  });
+
+  emitDeliveryRealtimeEvent({
+    type: 'ping_request',
+    driverId,
+    origin: 'office',
   });
 
   return NextResponse.json({ ok: true });

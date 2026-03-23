@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 import type {
   DailySchedule,
   DriverRow,
@@ -188,6 +189,7 @@ export function useDeliverySchedules(
           body: JSON.stringify({ stops: payload }),
         });
         if (!res.ok) throw new Error(await parseApiError(res));
+        markHubLocalMutationCommitted();
         toast.success('Order updated');
       } catch (e) {
         if (prev) setSchedule(s.driverId, prev);
@@ -213,6 +215,7 @@ export function useDeliverySchedules(
           body: JSON.stringify({ stops: payload }),
         });
         if (!res.ok) throw new Error(await parseApiError(res));
+        markHubLocalMutationCommitted();
         toast.success('Stop deleted');
       } catch (e) {
         if (prev) setSchedule(s.driverId, prev);
@@ -245,6 +248,7 @@ export function useDeliverySchedules(
           }),
         });
         if (!res.ok) throw new Error(await parseApiError(res));
+        markHubLocalMutationCommitted();
         const created = await res.json();
         const newSchedule = normalizeCreatedSchedule(created, driver);
         setSchedule(driver.id, newSchedule);

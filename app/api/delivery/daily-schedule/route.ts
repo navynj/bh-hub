@@ -1,9 +1,8 @@
+import { deliveryDailySchedulePostSchema, parseBody } from '@/lib/api/schemas';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
-import {
-  parseBody,
-  deliveryDailySchedulePostSchema,
-} from '@/lib/api/schemas';
 import { prisma } from '@/lib/core/prisma';
+import { emitDeliveryRealtimeEvent } from '@/lib/delivery/emit-delivery-realtime';
+import { toDriverScheduleApiShape } from '@/lib/delivery/resolve-driver-display-name';
 import { NextRequest, NextResponse } from 'next/server';
 
 /** Synthetic schedule id for API compatibility: date_driverId (e.g. 2025-03-04_cldriver123) */
@@ -12,7 +11,7 @@ export function scheduleIdFrom(dateStr: string, driverId: string): string {
 }
 
 export function parseScheduleId(
-  id: string
+  id: string,
 ): { dateStr: string; driverId: string } | null {
   const i = id.indexOf('_');
   if (i <= 0 || i === id.length - 1) return null;
@@ -35,7 +34,7 @@ export async function GET(request: NextRequest) {
   if (!dateStr) {
     return NextResponse.json(
       { error: 'Query param date is required (YYYY-MM-DD)' },
-      { status: 400 }
+      { status: 400 },
     );
   }
   const dateOnly = new Date(dateStr + 'Z');
@@ -62,7 +61,11 @@ export async function GET(request: NextRequest) {
       arrivedAt: true,
       departedAt: true,
       driver: {
-        select: { id: true, userId: true, name: true },
+        select: {
+          id: true,
+          userId: true,
+          user: { select: { name: true } },
+        },
       },
       deliveryLocation: {
         select: { id: true, name: true, address: true },
@@ -83,6 +86,10 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  type DailyStopApiRow = Omit<(typeof stops)[number], 'driver'> & {
+    driver: ReturnType<typeof toDriverScheduleApiShape>;
+  };
+
   // Group by driverId into schedule-shaped objects (same shape as before for frontend)
   const byDriver = new Map<
     string,
@@ -90,8 +97,8 @@ export async function GET(request: NextRequest) {
       id: string;
       date: string;
       driverId: string;
-      driver: { id: string; userId: string; name: string | null };
-      stops: typeof stops;
+      driver: ReturnType<typeof toDriverScheduleApiShape>;
+      stops: DailyStopApiRow[];
     }
   >();
   for (const stop of stops) {
@@ -101,11 +108,22 @@ export async function GET(request: NextRequest) {
         id: scheduleIdFrom(dateStr, did),
         date: dateStr,
         driverId: did,
-        driver: stop.driver,
+        driver: {
+          id: stop.driver.id,
+          userId: stop.driver.userId,
+          name: stop.driver.user?.name ?? null,
+        },
         stops: [],
       });
     }
-    byDriver.get(did)!.stops.push(stop);
+    byDriver.get(did)!.stops.push({
+      ...stop,
+      driver: {
+        id: stop.driver.id,
+        userId: stop.driver.userId,
+        name: stop.driver.user?.name ?? null,
+      },
+    });
   }
 
   const list = Array.from(byDriver.values());
@@ -132,7 +150,10 @@ export async function POST(request: NextRequest) {
 
   const driver = await prisma.driver.findUnique({
     where: { id: driverId },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      user: { select: { name: true } },
+    },
   });
   if (!driver) {
     return NextResponse.json({ error: 'Driver not found' }, { status: 400 });
@@ -144,7 +165,7 @@ export async function POST(request: NextRequest) {
   if (existingCount > 0) {
     return NextResponse.json(
       { error: 'Stops already exist for this driver on this date' },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -152,7 +173,13 @@ export async function POST(request: NextRequest) {
   const assignedAt = new Date();
 
   const createdStops = await prisma.$transaction(async (tx) => {
-    const created: { id: string; sequence: number; name: string; address: string | null; tasks: { id: string; title: string; sequence: number }[] }[] = [];
+    const created: {
+      id: string;
+      sequence: number;
+      name: string;
+      address: string | null;
+      tasks: { id: string; title: string; sequence: number }[];
+    }[] = [];
     for (let idx = 0; idx < stops.length; idx++) {
       const s = stops[idx];
       const stop = await tx.dailyScheduleStop.create({
@@ -196,8 +223,14 @@ export async function POST(request: NextRequest) {
     driverId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    driver: { id: driver.id, name: driver.name },
+    driver: { id: driver.id, name: driver.user?.name ?? null },
     stops: createdStops,
   };
+  emitDeliveryRealtimeEvent({
+    type: 'schedule',
+    driverId,
+    date,
+    origin: 'office',
+  });
   return NextResponse.json(schedule, { status: 201 });
 }

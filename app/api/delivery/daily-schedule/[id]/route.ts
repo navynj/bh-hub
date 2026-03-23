@@ -1,10 +1,8 @@
-import type { Prisma } from '@prisma/client';
+import { deliveryDailySchedulePatchSchema, parseBody } from '@/lib/api/schemas';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
-import {
-  parseBody,
-  deliveryDailySchedulePatchSchema,
-} from '@/lib/api/schemas';
 import { prisma } from '@/lib/core/prisma';
+import { emitDeliveryRealtimeEvent } from '@/lib/delivery/emit-delivery-realtime';
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseScheduleId } from '../route';
 
@@ -54,7 +52,7 @@ async function syncDailyStopTasks(
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -72,7 +70,10 @@ export async function GET(
   const { dateStr, driverId } = parsed;
   const dateOnly = new Date(dateStr + 'Z');
   if (Number.isNaN(dateOnly.getTime())) {
-    return NextResponse.json({ error: 'Invalid date in schedule id' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid date in schedule id' },
+      { status: 400 },
+    );
   }
 
   const stops = await prisma.dailyScheduleStop.findMany({
@@ -92,7 +93,11 @@ export async function GET(
       departedAt: true,
       createdAt: true,
       driver: {
-        select: { id: true, userId: true, name: true },
+        select: {
+          id: true,
+          userId: true,
+          user: { select: { name: true } },
+        },
       },
       deliveryLocation: {
         select: { id: true, name: true, address: true },
@@ -116,10 +121,17 @@ export async function GET(
   if (stops.length === 0) {
     const driver = await prisma.driver.findUnique({
       where: { id: driverId },
-      select: { id: true, userId: true, name: true },
+      select: {
+        id: true,
+        userId: true,
+        user: { select: { name: true } },
+      },
     });
     if (!driver) {
-      return NextResponse.json({ error: 'Schedule not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Schedule not found' },
+        { status: 404 },
+      );
     }
     return NextResponse.json({
       id,
@@ -127,7 +139,11 @@ export async function GET(
       driverId,
       createdAt: null,
       updatedAt: null,
-      driver,
+      driver: {
+        id: driver.id,
+        userId: driver.userId,
+        name: driver.user?.name ?? null,
+      },
       stops: [],
     });
   }
@@ -139,15 +155,26 @@ export async function GET(
     driverId,
     createdAt: first.createdAt,
     updatedAt: first.createdAt,
-    driver: first.driver,
-    stops,
+    driver: {
+      id: first.driver.id,
+      userId: first.driver.userId,
+      name: first.driver.user?.name ?? null,
+    },
+    stops: stops.map((s) => ({
+      ...s,
+      driver: {
+        id: s.driver.id,
+        userId: s.driver.userId,
+        name: s.driver.user?.name ?? null,
+      },
+    })),
   };
   return NextResponse.json(schedule);
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -165,7 +192,10 @@ export async function PATCH(
   const { dateStr, driverId } = parsed;
   const dateOnly = new Date(dateStr + 'Z');
   if (Number.isNaN(dateOnly.getTime())) {
-    return NextResponse.json({ error: 'Invalid date in schedule id' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid date in schedule id' },
+      { status: 400 },
+    );
   }
 
   const body = await parseBody(request, deliveryDailySchedulePatchSchema);
@@ -219,12 +249,7 @@ export async function PATCH(
               ...(s.lng !== undefined ? { lng: s.lng ?? null } : {}),
             },
           });
-          await syncDailyStopTasks(
-            tx,
-            s.id!,
-            s.tasks ?? [],
-            officeUserId,
-          );
+          await syncDailyStopTasks(tx, s.id!, s.tasks ?? [], officeUserId);
         } else {
           const created = await tx.dailyScheduleStop.create({
             data: {
@@ -238,12 +263,7 @@ export async function PATCH(
               lng: s.lng ?? null,
             },
           });
-          await syncDailyStopTasks(
-            tx,
-            created.id,
-            s.tasks ?? [],
-            officeUserId,
-          );
+          await syncDailyStopTasks(tx, created.id, s.tasks ?? [], officeUserId);
         }
       }
     });
@@ -256,12 +276,18 @@ export async function PATCH(
     });
   }
 
+  emitDeliveryRealtimeEvent({
+    type: 'schedule',
+    driverId,
+    date: dateStr,
+    origin: 'office',
+  });
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -279,7 +305,10 @@ export async function DELETE(
   const { dateStr, driverId } = parsed;
   const dateOnly = new Date(dateStr + 'Z');
   if (Number.isNaN(dateOnly.getTime())) {
-    return NextResponse.json({ error: 'Invalid date in schedule id' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Invalid date in schedule id' },
+      { status: 400 },
+    );
   }
 
   await prisma.dailyScheduleTask.deleteMany({
@@ -287,6 +316,12 @@ export async function DELETE(
   });
   await prisma.dailyScheduleStop.deleteMany({
     where: { date: dateOnly, driverId },
+  });
+  emitDeliveryRealtimeEvent({
+    type: 'schedule',
+    driverId,
+    date: dateStr,
+    origin: 'office',
   });
   return NextResponse.json({ ok: true });
 }

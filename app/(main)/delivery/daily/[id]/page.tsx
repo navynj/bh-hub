@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { markHubLocalMutationCommitted } from '@/lib/delivery/hub-local-mutation';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, MapPin, CheckCircle, Clock } from 'lucide-react';
 
@@ -81,6 +82,7 @@ export default function DailyScheduleDetailPage() {
       alert(j?.error ?? 'Delete failed');
       return;
     }
+    markHubLocalMutationCommitted();
     router.push('/delivery/daily');
   }, [id, router]);
 
@@ -120,7 +122,7 @@ export default function DailyScheduleDetailPage() {
         <span>/</span>
         <span>{dateLabel}</span>
         <span>/</span>
-        <span>{schedule.driver?.name ?? schedule.driverId}</span>
+        <span>{schedule.driver?.name ?? 'Driver'}</span>
       </div>
       <div className="flex items-center justify-between">
         <div>
