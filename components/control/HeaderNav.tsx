@@ -34,7 +34,7 @@ const HeaderNav = ({
         {getCanSeeDeliveryAndCost(role) && (
           <>
             <HeaderNavItem href="/delivery">Delivery</HeaderNavItem>
-            <HeaderNavItem href="/cost">Cost</HeaderNavItem>
+            {/* <HeaderNavItem href="/cost">Cost</HeaderNavItem> */}
           </>
         )}
       </div>
