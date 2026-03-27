@@ -8,40 +8,23 @@ import {
 type CosRow = { categoryId: string; name: string; amount: number };
 
 /**
- * Flat rows for the budget category list. Top-level parents use the same merge as
- * {@link getTopLevelCategoriesForCharts} (donut + bar chart); subcategories still come
- * from the union of current/reference by categoryId.
+ * Flat rows for the budget category list from **this month’s QuickBooks P&L only**
+ * (`currentCosByCategory`). Reference-period data is not merged in: QB omits zero lines,
+ * and unioning with reference created $0 ghost rows and drift vs QB.
  *
- * Rows with $0 this month but still shown: QuickBooks drops zero-amount lines from a report, but the other
- * period (reference vs current) may still carry that categoryId, so the union keeps the line at $0 for current.
+ * Top-level rows use the same roll-up as charts when passing current-only
+ * ({@link getTopLevelCategoriesForCharts}(current, [])).
  */
 export function deriveBudgetDisplayCategories(
   currentCosByCategory: CosRow[] | undefined,
-  referenceCosByCategory: CosRow[] | undefined,
+  _referenceCosByCategory: CosRow[] | undefined,
   totalBudget: number,
   currentCosTotal?: number,
   noReference?: boolean,
 ): BudgetCategoryRow[] {
   const current = currentCosByCategory ?? [];
-  const reference = referenceCosByCategory ?? [];
 
-  const currentMap = new Map(current.map((c) => [c.categoryId, c]));
-  const refMap = new Map(reference.map((c) => [c.categoryId, c]));
-  const allIds = new Set([...currentMap.keys(), ...refMap.keys()]);
-
-  const refList = [...allIds]
-    .map((categoryId) => {
-      const cur = currentMap.get(categoryId);
-      const ref = refMap.get(categoryId);
-      return cur ?? ref!;
-    })
-    .sort(
-      (a, b) =>
-        getTopLevelCategoryIndex(a.categoryId) -
-        getTopLevelCategoryIndex(b.categoryId),
-    );
-
-  if (!refList.length) return [];
+  if (!current.length) return [];
 
   const hasBudget = Number.isFinite(totalBudget) && totalBudget > 0;
   const totalForPercent = hasBudget
@@ -53,33 +36,34 @@ export function deriveBudgetDisplayCategories(
       : 0;
   const hasPercent = hasBudget || (noReference && totalForPercent > 0);
 
-  const mergedTop = getTopLevelCategoriesForCharts(current, reference);
+  const mergedTop = getTopLevelCategoriesForCharts(current, []);
 
-  const topRows: BudgetCategoryRow[] = mergedTop.map((row) => {
-    const amount = Number.isFinite(row.amount) ? row.amount : 0;
-    return {
-      id: row.categoryId,
-      categoryId: row.categoryId,
-      name: row.name,
-      amount,
-      percent: hasPercent ? (amount / totalForPercent) * 100 : null,
-    };
-  });
-
-  const childRows: BudgetCategoryRow[] = refList
-    .filter((ref) => parseCategoryPath(ref.categoryId).length > 1)
-    .map((ref) => {
-      const direct = currentMap.get(ref.categoryId)?.amount;
-      const amount =
-        direct != null && Number.isFinite(direct) ? direct : 0;
+  const topRows: BudgetCategoryRow[] = mergedTop
+    .map((row) => {
+      const amount = Number.isFinite(row.amount) ? row.amount : 0;
       return {
-        id: ref.categoryId,
-        categoryId: ref.categoryId,
-        name: ref.name,
+        id: row.categoryId,
+        categoryId: row.categoryId,
+        name: row.name,
         amount,
         percent: hasPercent ? (amount / totalForPercent) * 100 : null,
       };
-    });
+    })
+    .filter((row) => row.amount !== 0);
+
+  const childRows: BudgetCategoryRow[] = current
+    .filter((c) => parseCategoryPath(c.categoryId).length > 1)
+    .map((c) => {
+      const amount = Number.isFinite(c.amount) ? c.amount : 0;
+      return {
+        id: c.categoryId,
+        categoryId: c.categoryId,
+        name: c.name,
+        amount,
+        percent: hasPercent ? (amount / totalForPercent) * 100 : null,
+      };
+    })
+    .filter((row) => row.amount !== 0);
 
   return [...topRows, ...childRows].sort(
     (a, b) =>

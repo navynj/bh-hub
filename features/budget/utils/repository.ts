@@ -233,6 +233,7 @@ export async function attachReferenceCosToBudgets<
 ): Promise<
   (T & {
     referenceCosTotal?: number;
+    referenceIncomeTotal?: number;
     referenceCosByCategory?: {
       categoryId: string;
       name: string;
@@ -243,6 +244,7 @@ export async function attachReferenceCosToBudgets<
   if (!isValidYearMonth(yearMonth))
     return budgets as (T & {
       referenceCosTotal?: number;
+      referenceIncomeTotal?: number;
       referenceCosByCategory?: {
         categoryId: string;
         name: string;
@@ -271,6 +273,7 @@ export async function attachReferenceCosToBudgets<
       return {
         ...b,
         referenceCosTotal: cosTotal,
+        referenceIncomeTotal: r.value.incomeTotal,
         referenceCosByCategory: r.value.cosByCategory,
       };
     }

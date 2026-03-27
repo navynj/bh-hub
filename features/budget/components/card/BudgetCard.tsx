@@ -142,6 +142,7 @@ function BudgetCard({
           totalBudget={totalAmount}
           displayRate={displayRate}
           displayPeriod={displayPeriod}
+          referenceIncomeTotal={budget.referenceIncomeTotal}
         />
         {!hideChart && (
           <TotalBudgetChart

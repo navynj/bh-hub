@@ -9,6 +9,7 @@ type BudgetAmountSummaryProps = {
   totalBudget: number;
   displayRate: number | null;
   displayPeriod: number | null;
+  referenceIncomeTotal?: number;
 };
 
 function BudgetAmountSummary({
@@ -18,6 +19,7 @@ function BudgetAmountSummary({
   totalBudget,
   displayRate,
   displayPeriod,
+  referenceIncomeTotal,
 }: BudgetAmountSummaryProps) {
   const noReference = displayPeriod != null && displayPeriod <= 0;
   return (
@@ -53,6 +55,8 @@ function BudgetAmountSummary({
         <BudgetRateRefInfo
           displayRate={displayRate}
           displayPeriod={displayPeriod}
+          totalBudget={totalBudget}
+          referenceIncomeTotal={referenceIncomeTotal}
           hideRefWhenZero
           textAlignClassName="text-right"
         />

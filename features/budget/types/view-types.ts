@@ -30,6 +30,8 @@ export type BudgetDataType = {
   currentCosByCategory?: CurrentCosByCategory;
   /** Reference-period COS total (N months before yearMonth) for category budget ratio. */
   referenceCosTotal?: number;
+  /** Reference-period income total (same window as COS) for total budget breakdown. */
+  referenceIncomeTotal?: number;
   /** Reference-period COS per category (N months before yearMonth). */
   referenceCosByCategory?: { categoryId: string; name: string; amount: number }[];
 };
@@ -58,6 +60,8 @@ export type BudgetWithLocationAndCategories = {
   currentCosByCategory?: { categoryId: string; name: string; amount: number }[];
   /** Reference-period COS total (N months before yearMonth) for category budget ratio. */
   referenceCosTotal?: number;
+  /** Reference-period income total (same window as COS) for total budget breakdown. */
+  referenceIncomeTotal?: number;
   /** Reference-period COS per category (N months before yearMonth). */
   referenceCosByCategory?: { categoryId: string; name: string; amount: number }[];
 };
