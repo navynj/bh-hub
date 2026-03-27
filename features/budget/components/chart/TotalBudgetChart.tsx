@@ -15,7 +15,7 @@ import { ClassName } from '@/types/className';
 interface TotalBudgetChartProps extends ClassName {
   totalAmount: number; // Budget total; all chart percentages are share of budget
   currentCosByCategory?: { categoryId: string; name: string; amount: number }[];
-  /** Reference COS categories (used to show top-level categories that only have children in current, e.g. COS3). */
+  /** Reference COS (unused for donut slices; current month is shown from QB current only). */
   referenceCosByCategory?: { categoryId: string; name: string; amount: number }[];
   /** When <= 0, no reference income: show current COS only (100% = current COS total). */
   referencePeriodMonthsUsed?: number | null;
@@ -58,10 +58,10 @@ const TotalBudgetChart = ({
     ) : null;
   }
 
-  // Merged top-level (current + reference) with roll-up: so COS3 etc. appear when they only have children in current
+  // Current month QB only (no reference union) so slices match P&L / category list
   const forCharts = getTopLevelCategoriesForCharts(
     currentCosByCategory,
-    referenceCosByCategory,
+    [],
   );
   const topLevelCategories =
     forCharts.length > 0

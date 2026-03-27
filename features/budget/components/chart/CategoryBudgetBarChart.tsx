@@ -5,6 +5,7 @@ import { ChartConfig } from '@/components/ui/chart';
 import { CHART_COLORS } from '@/constants/color';
 import {
   getTopLevelCategoriesForCharts,
+  getTopLevelCategoryIndex,
   getTopLevelCategoryRows,
 } from '@/features/report/utils/category';
 import { ClassName } from '@/types/className';
@@ -52,10 +53,10 @@ const CategoryBudgetBarChart = ({
     referencePeriodMonthsUsed != null && referencePeriodMonthsUsed <= 0;
   const cosOnlyMode = noReference;
 
-  // Merged top-level (current + reference) with roll-up so COS3 etc. appear when they only have children in current
+  // Current month amounts from QB only (reference is still used for budget baseline via refTop)
   const currentTop = getTopLevelCategoriesForCharts(
     currentCosByCategory ?? [],
-    referenceCosByCategory ?? [],
+    [],
   );
   const refTop = referenceCosByCategory
     ? getTopLevelCategoryRows(referenceCosByCategory)
@@ -65,12 +66,21 @@ const CategoryBudgetBarChart = ({
   const currentByCategoryId = new Map(
     currentTop.map((c) => [c.categoryId, c.amount]),
   );
-  const rowsToShow = refTop.length > 0 && !cosOnlyMode ? refTop : currentTop;
+
+  /** One bar per top-level COS with current spend > 0 (skip $0). Includes COS with no reference row so they still appear. */
+  const rowsToShow = currentTop
+    .filter((c) => {
+      const amt = Number.isFinite(c.amount) ? c.amount : 0;
+      return amt > 0;
+    })
+    .sort(
+      (a, b) =>
+        getTopLevelCategoryIndex(a.categoryId) -
+        getTopLevelCategoryIndex(b.categoryId),
+    );
 
   const chartData = rowsToShow.map((row, index) => {
-    const current =
-      currentByCategoryId.get(row.categoryId) ??
-      (refTop.length > 0 && !cosOnlyMode ? 0 : row.amount);
+    const current = currentByCategoryId.get(row.categoryId) ?? 0;
     const refCos =
       refTop.find((r) => r.categoryId === row.categoryId)?.amount ?? 0;
     const categoryBudget =
@@ -78,11 +88,19 @@ const CategoryBudgetBarChart = ({
         ? (totalBudget * refCos) / refTopTotal
         : 0;
 
-    const currentSeg = cosOnlyMode
-      ? current
-      : Math.min(current, categoryBudget);
-    const budgetSeg = cosOnlyMode ? 0 : Math.max(0, categoryBudget - current);
-    const overSeg = cosOnlyMode ? 0 : Math.max(0, current - categoryBudget);
+    // Reference mode: category budget share 0 ⇒ that month’s budget for the COS is 0; actual spend is all "over".
+    let currentSeg: number;
+    let budgetSeg: number;
+    let overSeg: number;
+    if (cosOnlyMode) {
+      currentSeg = current;
+      budgetSeg = 0;
+      overSeg = 0;
+    } else {
+      currentSeg = Math.min(current, categoryBudget);
+      budgetSeg = Math.max(0, categoryBudget - current);
+      overSeg = Math.max(0, current - categoryBudget);
+    }
 
     const cosNumReg = /COS(\d+)/;
     const cosNum = row.name.match(cosNumReg)?.[1];
