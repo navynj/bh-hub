@@ -48,7 +48,7 @@ const LocationPage = async ({
   const yearMonth = searchYearMonth ?? getCurrentYearMonth();
   if (!isValidYearMonth(yearMonth)) {
     redirect(
-      `/dashboard/budget/location/${id}?yearMonth=${getCurrentYearMonth()}`,
+      `/dashboard/cost/location/${id}?yearMonth=${getCurrentYearMonth()}`,
     );
   }
 

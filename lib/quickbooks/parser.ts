@@ -51,7 +51,9 @@ function findSection(
  * We use the Total column (last) so income/COS reflect the full requested range; otherwise use the single value column (index 1).
  * Blank/empty cells are treated as 0 via parseAmount.
  */
-function getValueColumnIndex(colData: { value?: unknown }[] | undefined): number {
+function getValueColumnIndex(
+  colData: { value?: unknown }[] | undefined,
+): number {
   const arr = Array.isArray(colData) ? colData : [];
   if (arr.length > 2) return arr.length - 1; // Total column
   return 1; // Single period value

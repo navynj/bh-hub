@@ -12,11 +12,16 @@ import {
   isQuickBooksConfigured,
 } from '@/lib/quickbooks';
 import type { ReferenceData, QuickBooksApiContext } from '../types';
-import { referencePreviousMonthRange, referenceCurrentMonthRange } from './date-ranges';
+import {
+  referencePreviousMonthRange,
+  referenceCurrentMonthRange,
+} from './date-ranges';
 import { formatYearMonth } from '@/lib/utils/date';
 
 /** Get the realmId for a location. Throws AppError when QB not configured or location has no realm. */
-export async function getRealmIdByLocation(locationId: string): Promise<string> {
+export async function getRealmIdByLocation(
+  locationId: string,
+): Promise<string> {
   if (!isQuickBooksConfigured()) {
     throw new AppError('QuickBooks is not configured');
   }

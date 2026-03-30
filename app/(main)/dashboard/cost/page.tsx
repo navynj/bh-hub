@@ -22,7 +22,7 @@ export default async function BudgetPage({ searchParams }: Props) {
   const { yearMonth: searchYearMonth } = await searchParams;
   const yearMonth = searchYearMonth ?? getCurrentYearMonth();
   if (!isValidYearMonth(yearMonth)) {
-    redirect(`/dashboard/budget?yearMonth=${getCurrentYearMonth()}`);
+    redirect(`/dashboard/cost?yearMonth=${getCurrentYearMonth()}`);
   }
 
   // ===============================
@@ -36,7 +36,7 @@ export default async function BudgetPage({ searchParams }: Props) {
   const managerLocationId = session?.user?.locationId ?? undefined;
   if (!getOfficeOrAdmin(session?.user?.role) && managerLocationId) {
     redirect(
-      `/dashboard/budget/location/${managerLocationId}?yearMonth=${yearMonth}`,
+      `/dashboard/cost/location/${managerLocationId}?yearMonth=${yearMonth}`,
     );
   }
 

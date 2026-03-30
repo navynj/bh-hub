@@ -1,3 +1,5 @@
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { BudgetWithLocationAndCategories } from '@/features/dashboard/budget';
 import { deriveBudgetDisplayCategories } from '@/features/dashboard/budget/utils/derive-display-categories';
@@ -28,7 +30,7 @@ function BudgetCard({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const isLocationPage = pathname.includes('/dashboard/budget/location/');
+  const isLocationPage = pathname.includes('/dashboard/cost/location/');
 
   const [updating, setUpdating] = React.useState(false);
   const [optimisticRate, setOptimisticRate] = React.useState<number | null>(

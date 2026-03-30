@@ -125,7 +125,7 @@ export async function GET(request: NextRequest) {
       const safe = safeRedirectPath(returnTo);
       redirectPath = safe ?? '/';
     } else if (locationId) {
-      redirectPath = `/dashboard/budget/location/${locationId}`;
+      redirectPath = `/dashboard/cost/location/${locationId}`;
     } else {
       redirectPath = '/';
     }

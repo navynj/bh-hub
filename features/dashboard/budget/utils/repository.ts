@@ -1,10 +1,21 @@
 import { AppError } from '@/lib/core/errors';
 import { prisma } from '@/lib/core/prisma';
 import type { Prisma } from '@prisma/client';
-import type { BudgetDataType, CreateBudgetInput, QuickBooksApiContext } from '../types';
-import { parseYearMonth, isValidYearMonth, isBeforeYearMonth } from '@/lib/utils';
+import type {
+  BudgetDataType,
+  CreateBudgetInput,
+  QuickBooksApiContext,
+} from '../types';
+import {
+  parseYearMonth,
+  isValidYearMonth,
+  isBeforeYearMonth,
+} from '@/lib/utils';
 import { computeTotalBudget } from './calculations';
-import { getOrCreateBudgetSettings, DEFAULT_REFERENCE_PERIOD_MONTHS } from './settings';
+import {
+  getOrCreateBudgetSettings,
+  DEFAULT_REFERENCE_PERIOD_MONTHS,
+} from './settings';
 import { getReferenceIncomeAndCos, getCurrentMonthCos } from './reference-data';
 
 type BudgetWithLocationRaw = Prisma.BudgetGetPayload<{
@@ -49,15 +60,14 @@ async function upsertBudgetStubWithError(
   });
 }
 
-type RawBudgetWithInclude = Awaited<
-  ReturnType<
-    typeof prisma.budget.findFirst<{ include: { location: true } }>
-  >
-> extends infer R
-  ? R extends null
-    ? never
-    : R
-  : never;
+type RawBudgetWithInclude =
+  Awaited<
+    ReturnType<typeof prisma.budget.findFirst<{ include: { location: true } }>>
+  > extends infer R
+    ? R extends null
+      ? never
+      : R
+    : never;
 
 export function mapBudgetToDataType(raw: RawBudgetWithInclude): BudgetDataType {
   return {
@@ -86,7 +96,10 @@ export async function ensureBudgetForMonth(
     where: { id: locationId },
     select: { startYearMonth: true },
   });
-  if (location?.startYearMonth != null && isBeforeYearMonth(yearMonth, location.startYearMonth)) {
+  if (
+    location?.startYearMonth != null &&
+    isBeforeYearMonth(yearMonth, location.startYearMonth)
+  ) {
     return null;
   }
 

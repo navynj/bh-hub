@@ -4,8 +4,7 @@ import { cn } from '@/lib/utils';
 import type { BudgetViewProps } from '@/features/dashboard/budget';
 import { PropsWithChildren, useMemo } from 'react';
 import BudgetCard from './BudgetCard';
-
-const QB_REFRESH_EXPIRED = 'QB_REFRESH_EXPIRED';
+import { QB_REFRESH_EXPIRED } from '@/constants/error';
 
 function BudgetCardList({
   yearMonth,

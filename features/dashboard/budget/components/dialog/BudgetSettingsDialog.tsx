@@ -21,7 +21,7 @@ export function BudgetSettingsDialog({
   initialReferencePeriodMonths,
 }: BudgetSettingsDialogProps) {
   const pathname = usePathname();
-  const isBudgetPage = pathname === '/dashboard/budget';
+  const isBudgetPage = pathname === '/dashboard/cost';
   if (!isBudgetPage) return null;
 
   return (
