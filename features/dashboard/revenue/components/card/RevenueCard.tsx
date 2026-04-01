@@ -20,17 +20,17 @@ const RevenueCard = ({
 }: RevenueCardProps) => {
   return (
     <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="w-full text-xl font-bold">Revenue</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <WeeklyRevenueCard
+      <CardContent>
+        {/* <WeeklyRevenueCard
           key={yearMonth}
           locationId={locationId}
           yearMonth={yearMonth}
           initialData={weeklyRevenue}
           initialWeekOffset={initialWeekOffset}
-        />
+        /> */}
         <MonthlyRevenueCard data={monthlyRevenue} />
       </CardContent>
     </Card>

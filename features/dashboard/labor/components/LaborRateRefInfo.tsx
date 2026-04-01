@@ -7,13 +7,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { CircleHelp } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
+import { CircleHelp } from 'lucide-react';
 
 type LaborRateRefInfoProps = {
   displayRate: number;
@@ -87,7 +82,8 @@ export function LaborRateRefInfo({
                 <p className="mt-2">
                   When reference income is available, target equals average
                   monthly income over the reference period multiplied by the
-                  rate (same inputs as Cost budget).
+                  rate. Labor rate and reference period are separate from the
+                  cost budget.
                 </p>
               )}
             </section>

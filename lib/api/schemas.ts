@@ -83,6 +83,13 @@ export const budgetPatchSchema = z.object({
     .optional(),
 });
 
+/** PATCH /api/dashboard/labor-target/[locationId] */
+export const laborTargetPatchSchema = z.object({
+  yearMonth: yearMonthSchema.optional(),
+  laborBudgetRate: z.number().min(0).max(1).optional(),
+  laborReferencePeriodMonths: z.number().int().min(0).max(24).optional(),
+});
+
 /** POST /api/dashboard/budget/bulk — bulk update budgets in a year-month range */
 export const budgetBulkPatchSchema = z
   .object({

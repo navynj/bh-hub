@@ -47,6 +47,37 @@ function findSection(
 }
 
 /**
+ * Depth-first search for a section whose header/group matches (QuickBooks often nests
+ * "Expense D" or "Payroll Expenses" under a parent like "Expenses").
+ */
+function findSectionDeep(
+  rows: { Row?: unknown[] } | undefined,
+  titleMatch: (title: string) => boolean,
+): unknown | undefined {
+  const rowList = Array.isArray(rows?.Row) ? rows.Row : [];
+  for (const row of rowList) {
+    const header = (row as { Header?: { ColData?: { value?: string }[] } })
+      ?.Header?.ColData?.[0]?.value;
+    if (header && titleMatch(header)) return row;
+    const group = (row as { group?: string }).group;
+    if (group && titleMatch(group)) return row;
+    const nested = (row as { Rows?: { Row?: unknown[] } })?.Rows;
+    const found = findSectionDeep(nested, titleMatch);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+/** P&L group title for labor (Expense D); some locations use "Payroll Expenses" instead. */
+function isLaborExpenseSectionTitle(title: string): boolean {
+  const t = title.trim();
+  if (/\(deleted\)/i.test(t)) return false;
+  if (/^expense\s+d\b/i.test(t)) return true;
+  if (/^payroll\s*expenses?$/i.test(t)) return true;
+  return false;
+}
+
+/**
  * For multi-period P&L reports, QuickBooks returns one column per period plus a "Total" column.
  * We use the Total column (last) so income/COS reflect the full requested range; otherwise use the single value column (index 1).
  * Blank/empty cells are treated as 0 via parseAmount.
@@ -218,6 +249,57 @@ function sectionExpenseDTopLevelLineItems(
   return out;
 }
 
+/**
+ * Leaf accounts only: if a row has nested Rows, recurse into children and do not add
+ * the parent's rollup (e.g. "D - Payroll Expense", "D - Wages") so labor buckets use
+ * HQ Barista / HQ Managers / Wage1- Manager instead of one lump in Wage.
+ *
+ * Display name: `immediate parent / leaf` when nested (e.g. `D - Subcontractors / L3 - MAIN`)
+ * so QuickBooks hierarchy is visible without repeating the full tree.
+ */
+function collectExpenseDLeafLineItems(
+  row: PlRow,
+  path: number[],
+  ancestorChain: string[],
+  out: { id: string; name: string; amount: number }[],
+): void {
+  const name = categoryOrLineName(row);
+  if (!name) return;
+  if (!row?.Header && /^expense\s+d$/i.test(name.trim())) return;
+  const subRows = row?.Rows?.Row;
+  if (Array.isArray(subRows) && subRows.length > 0) {
+    subRows.forEach((sub, idx) => {
+      collectExpenseDLeafLineItems(
+        sub,
+        [...path, idx],
+        [...ancestorChain, name],
+        out,
+      );
+    });
+    return;
+  }
+  const displayName =
+    ancestorChain.length > 0
+      ? `${ancestorChain[ancestorChain.length - 1]} / ${name}`
+      : name;
+  const id = stableQbIdForNonCosTopLevelName(
+    `expenseD-leaf:${path.join('-')}:${ancestorChain.join('|')}:${name}`,
+  );
+  out.push({ id, name: displayName, amount: Math.abs(rowTotal(row)) });
+}
+
+function sectionExpenseDLeafLineItems(
+  expenseDSection: unknown,
+): { id: string; name: string; amount: number }[] {
+  const r = expenseDSection as { Rows?: { Row?: PlRow[] } };
+  const rowList = Array.isArray(r?.Rows?.Row) ? r.Rows.Row : [];
+  const out: { id: string; name: string; amount: number }[] = [];
+  rowList.forEach((category, catIdx) => {
+    collectExpenseDLeafLineItems(category as PlRow, [catIdx], [], out);
+  });
+  return out;
+}
+
 function sectionExpenseDLineItemsRecurse(
   row: PlRow,
   path: number[],
@@ -251,21 +333,20 @@ function sectionExpenseDLineItemsAllLevels(
   return out;
 }
 
-/** Line items under P&L "Expense D" (QuickBooks). Prefers direct children; falls back to all nested rows. */
+/**
+ * Line items under P&L labor section (Expense D / Payroll Expenses).
+ * Uses leaf accounts only so rollup parents are not classified as Wage; falls back to
+ * top-level direct rows if the tree has no leaves (flat report).
+ */
 export function parseExpenseDLineItemsFromReportRows(
   rows: { Row?: unknown[] } | undefined,
 ): { categoryId: string; name: string; amount: number }[] {
-  const expenseDSection = findSection(
-    rows,
-    (t) =>
-      /^expense\s+d\b/i.test(t.trim()) && !/\(deleted/i.test(t.trim()),
-  );
+  const expenseDSection = findSectionDeep(rows, isLaborExpenseSectionTitle);
   if (!expenseDSection) return [];
-  const direct = sectionExpenseDTopLevelLineItems(expenseDSection);
-  const lines =
-    direct.length > 0
-      ? direct
-      : sectionExpenseDLineItemsAllLevels(expenseDSection);
+  let lines = sectionExpenseDLeafLineItems(expenseDSection);
+  if (lines.length === 0) {
+    lines = sectionExpenseDTopLevelLineItems(expenseDSection);
+  }
   return lines.map((c) => ({
     categoryId: c.id,
     name: c.name,
@@ -277,11 +358,7 @@ export function parseExpenseDLineItemsFromReportRows(
 export function parseExpenseDTotalFromReportRows(
   rows: { Row?: unknown[] } | undefined,
 ): number {
-  const expenseDSection = findSection(
-    rows,
-    (t) =>
-      /^expense\s+d\b/i.test(t.trim()) && !/\(deleted/i.test(t.trim()),
-  );
+  const expenseDSection = findSectionDeep(rows, isLaborExpenseSectionTitle);
   if (!expenseDSection) return 0;
   return Math.abs(rowTotal(expenseDSection));
 }

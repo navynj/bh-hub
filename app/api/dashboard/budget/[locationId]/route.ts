@@ -121,19 +121,33 @@ export async function PATCH(
     const referencePeriodMonths = body.referencePeriodMonths;
     const referenceData = body.referenceData;
 
+    const hasCostPatch =
+      budgetRate !== undefined || referencePeriodMonths !== undefined;
+
     const context: QuickBooksApiContext = {
       baseUrl: new URL(request.url).origin,
       cookie: request.headers.get('cookie'),
     };
-    await ensureBudgetForMonth({
-      locationId,
-      yearMonth,
-      userId: session.user.id,
-      budgetRate,
-      referencePeriodMonths,
-      referenceData,
-      context,
-    });
+
+    if (hasCostPatch) {
+      await ensureBudgetForMonth({
+        locationId,
+        yearMonth,
+        userId: session.user.id,
+        budgetRate,
+        referencePeriodMonths,
+        referenceData,
+        context,
+      });
+    } else {
+      await ensureBudgetForMonth({
+        locationId,
+        yearMonth,
+        userId: session.user.id,
+        context,
+      });
+    }
+
     const budget = await getBudgetByLocationAndMonth(locationId, yearMonth);
     if (!budget) {
       return NextResponse.json(

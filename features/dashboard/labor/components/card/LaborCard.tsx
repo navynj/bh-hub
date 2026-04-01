@@ -2,7 +2,10 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import UpdateBudgetButton from '@/features/dashboard/budget/components/card/UpdateBudgetButton';
-import { resolveLaborTargetFromBudget } from '@/features/dashboard/labor/utils/compute-labor-target';
+import {
+  DEFAULT_LABOR_RATE,
+  resolveLaborTarget,
+} from '@/features/dashboard/labor/utils/compute-labor-target';
 import type { LaborDashboardData } from '../../types';
 import LaborChart from '../chart/LaborChart';
 import LaborCategoryList from '../list/LaborCategoryList';
@@ -12,10 +15,10 @@ import React from 'react';
 import LaborTimeNeeded from '../LaborTimeNeeded';
 
 const LABOR_MODAL_RATE_TOOLTIP =
-  'Percentage of average monthly income from the reference period used as the labor target. Same field as Cost budget.';
+  'Percentage of average monthly income from the reference period used as the labor target. Independent of the cost budget rate.';
 
 const LABOR_MODAL_REF_TOOLTIP =
-  'Number of months of historical income used to compute that average. Same field as Cost budget.';
+  'Number of months of historical income used to compute that average. Independent of the cost budget reference period.';
 
 type LaborCardProps = {
   data: LaborDashboardData;
@@ -44,11 +47,16 @@ export default function LaborCard({
   const displayPeriod =
     optimisticPeriod != null ? optimisticPeriod : data.displayPeriod;
 
-  const { targetLabor } = resolveLaborTargetFromBudget({
-    referenceIncomeTotal: data.referenceIncomeTotal,
-    referencePeriodMonthsUsed: displayPeriod,
-    budgetRateUsed: displayRate,
-  });
+  const targetLabor =
+    optimisticRate != null || optimisticPeriod != null
+      ? resolveLaborTarget({
+          referenceIncomeTotal: data.referenceIncomeTotal,
+          laborTarget: {
+            rate: displayRate,
+            referencePeriodMonths: displayPeriod,
+          },
+        }).targetLabor
+      : data.targetLabor;
 
   const onUpdateStart = React.useCallback((rate?: number, period?: number) => {
     setUpdating(true);
@@ -86,6 +94,8 @@ export default function LaborCard({
             rateTooltip={LABOR_MODAL_RATE_TOOLTIP}
             periodTooltip={LABOR_MODAL_REF_TOOLTIP}
             idPrefix="labor-update-target"
+            ratePlaceholder={`e.g. ${Math.round(DEFAULT_LABOR_RATE * 100)}`}
+            patchTarget="labor"
             onUpdateStart={onUpdateStart}
             onUpdateSuccess={onUpdateSuccess}
             onUpdateError={onUpdateError}
@@ -93,7 +103,7 @@ export default function LaborCard({
         )}
       </CardHeader>
       <CardContent className="space-y-5">
-        <LaborTimeNeeded />
+        {/* <LaborTimeNeeded /> */}
         <div className="flex flex-col gap-4 sm:items-center">
           <LaborSummary
             totalLabor={data.totalLabor}
@@ -106,6 +116,7 @@ export default function LaborCard({
           <LaborChart
             categories={data.categories}
             totalLabor={data.totalLabor}
+            targetLabor={targetLabor}
           />
         </div>
         <LaborCategoryList

@@ -4,9 +4,19 @@ export {
   classifyExpenseDLineToLaborIndex,
 } from './utils/get-labor-data';
 export {
+  getLaborTargetByLocationAndMonth,
+  upsertLaborTarget,
+  type LaborTargetRow,
+} from './utils/labor-target-repository';
+export {
   DEFAULT_LABOR_RATE,
   DEFAULT_LABOR_REFERENCE_MONTHS,
-  resolveLaborTargetFromBudget,
-  type LaborBudgetInput,
+  resolveLaborTarget,
+  type LaborTargetRateInput,
+  type LaborTargetResolveInput,
 } from './utils/compute-labor-target';
-export type { LaborCategoryItem, LaborDashboardData } from './types';
+export type {
+  LaborCategoryItem,
+  LaborDashboardData,
+  LaborLineDetail,
+} from './types';

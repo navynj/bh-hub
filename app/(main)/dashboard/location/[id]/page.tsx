@@ -9,7 +9,10 @@ import {
 } from '@/features/dashboard/budget';
 import BudgetCard from '@/features/dashboard/budget/components/card/BudgetCard';
 import LaborCard from '@/features/dashboard/labor/components/card/LaborCard';
-import { getLaborDashboardData } from '@/features/dashboard/labor';
+import {
+  getLaborDashboardData,
+  getLaborTargetByLocationAndMonth,
+} from '@/features/dashboard/labor';
 import RevenueCard from '@/features/dashboard/revenue/components/card/RevenueCard';
 import {
   getCloverWeeklyRevenueData,
@@ -131,14 +134,17 @@ const LocationPage = async ({
   };
 
   const initialWeekOffset = getWeekOffsetContainingToday(yearMonth);
-  const monthlyTargetIncome = await resolveMonthlyTargetIncome(
-    id,
-    yearMonth,
-    budget,
-    budgetMeta,
-    session?.user?.id ?? undefined,
-    context,
-  );
+  const [monthlyTargetIncome, laborTargetRow] = await Promise.all([
+    resolveMonthlyTargetIncome(
+      id,
+      yearMonth,
+      budget,
+      budgetMeta,
+      session?.user?.id ?? undefined,
+      context,
+    ),
+    getLaborTargetByLocationAndMonth(id, yearMonth),
+  ]);
   const precomputed: PrecomputedRevenueBudget = {
     budget,
     monthlyTargetIncome,
@@ -158,11 +164,14 @@ const LocationPage = async ({
       initialWeekOffset,
       monthlyTargetIncome,
     ),
-    getLaborDashboardData(id, yearMonth, context, budget),
+    getLaborDashboardData(id, yearMonth, context, {
+      referenceIncomeTotal: budget.referenceIncomeTotal,
+      laborTarget: laborTargetRow,
+    }),
   ]);
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid max-lg:grid-cols-1 grid-cols-3 gap-4">
       <RevenueCard
         locationId={id}
         yearMonth={yearMonth}

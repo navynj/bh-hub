@@ -98,12 +98,7 @@ export function WeekRangeNav({
   const goNext = () => setWeekOffset((o) => o + 1);
 
   return (
-    <div
-      className={cn(
-        'flex shrink-0 items-center gap-2 pl-6 sm:pl-0',
-        className,
-      )}
-    >
+    <div className={cn('flex shrink-0 items-center gap-2 sm:pl-0', className)}>
       <Button
         type="button"
         variant="outline"
@@ -118,7 +113,7 @@ export function WeekRangeNav({
       >
         <ChevronLeft className="size-3.5" />
       </Button>
-      <span className="text-muted-foreground min-w-[10rem] text-center text-xs tabular-nums sm:text-sm">
+      <span className="text-muted-foreground text-center text-xs tabular-nums sm:text-sm">
         {rangeLabel}
       </span>
       <Button

@@ -65,16 +65,17 @@ model Realm {
 }
 
 model Location {
-  id             String   @id @default(cuid())
-  code           String   @unique
+  id             String        @id @default(cuid())
+  code           String        @unique
   name           String
-  createdAt      DateTime @default(now()) @map("created_at")
-  classId        String?  @map("class_id")
-  realmId        String   @map("realm_id")
-  startYearMonth String?  @map("start_year_month")
-  showBudget     Boolean  @default(true) @map("show_budget")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  classId        String?       @map("class_id")
+  realmId        String        @map("realm_id")
+  startYearMonth String?       @map("start_year_month")
+  showBudget     Boolean       @default(true) @map("show_budget")
   budgets        Budget[]
-  realm          Realm    @relation(fields: [realmId], references: [id])
+  laborTargets   LaborTarget[]
+  realm          Realm         @relation(fields: [realmId], references: [id])
   users          User[]
 
   @@map("locations")
@@ -158,6 +159,23 @@ model Budget {
 
   @@unique([locationId, yearMonth])
   @@map("budgets")
+  @@schema("budget")
+}
+
+/**
+ * Labor dashboard target (rate × ref income ÷ months). Independent of Cost budget.
+ */
+model LaborTarget {
+  id                    String   @id @default(cuid())
+  locationId            String   @map("location_id")
+  yearMonth             String   @map("year_month")
+  rate                  Decimal  @map("rate") @db.Decimal(5, 4)
+  referencePeriodMonths Int      @map("reference_period_months")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  location              Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, yearMonth])
+  @@map("labor_targets")
   @@schema("budget")
 }
 

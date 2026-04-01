@@ -35,9 +35,7 @@ export default async function BudgetPage({ searchParams }: Props) {
 
   const managerLocationId = session?.user?.locationId ?? undefined;
   if (!getOfficeOrAdmin(session?.user?.role) && managerLocationId) {
-    redirect(
-      `/dashboard/cost/location/${managerLocationId}?yearMonth=${yearMonth}`,
-    );
+    redirect(`/dashboard/location/${managerLocationId}?yearMonth=${yearMonth}`);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL

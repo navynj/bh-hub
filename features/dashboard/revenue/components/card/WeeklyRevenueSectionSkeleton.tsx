@@ -8,9 +8,12 @@ import { ChartSkeleton } from '@/features/dashboard/budget/components/card/Budge
  */
 export default function WeeklyRevenueSectionSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Loading weekly revenue">
+    <div
+      className="space-y-4"
+      aria-busy="true"
+      aria-label="Loading weekly revenue"
+    >
       <div className="flex flex-col gap-4 sm:items-center">
-        <ChartSkeleton className="max-h-[200px] min-h-[180px] w-full max-w-[280px]" />
         <div className="w-full space-y-3">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-2">
@@ -22,6 +25,7 @@ export default function WeeklyRevenueSectionSkeleton() {
               <Skeleton className="ml-auto h-5 w-24" />
             </div>
           </div>
+          <ChartSkeleton className="max-h-[200px] min-h-[180px] w-full max-w-[280px]" />
         </div>
       </div>
       <div className="flex aspect-[16/7] min-h-[200px] w-full max-w-none items-end gap-1.5 rounded-lg border border-dashed border-muted/60 bg-muted/20 p-2 pt-6">

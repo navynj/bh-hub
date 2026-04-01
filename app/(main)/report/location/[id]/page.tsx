@@ -56,8 +56,11 @@ export default async function ReportLocationPage({
       <div>
         <h1 className="text-2xl font-semibold">P&L Reports</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {connection.realmName ?? connection.locationCode} — Generate and view
-          Profit & Loss reports. Reports are stored in Notion.
+          {connection.locationCode ??
+            connection.locationName ??
+            connection.realmName}{' '}
+          — Generate and view Profit & Loss reports. Reports are stored in
+          Notion.
         </p>
       </div>
 

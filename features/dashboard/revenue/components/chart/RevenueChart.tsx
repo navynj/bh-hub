@@ -25,9 +25,9 @@ function RevenueChart({ categories, className }: RevenueChartProps) {
   if (chartData.length === 0 || sumCategories <= 0) {
     return (
       <div
-        className={`text-muted-foreground flex min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm ${className ?? ''}`}
+        className={`text-muted-foreground flex min-h-[180px] items-center justify-center rounded-lg border border-dashed text-sm px-4 ${className ?? ''}`}
       >
-        No category data for this period.
+        No data for this period.
       </div>
     );
   }

@@ -7,6 +7,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DEFAULT_LABOR_RATE,
+  DEFAULT_LABOR_REFERENCE_MONTHS,
+} from '@/features/dashboard/labor/utils/compute-labor-target';
 import { CircleHelp } from 'lucide-react';
 import React from 'react';
 
@@ -58,6 +62,9 @@ function UpdateBudgetModal({
   periodTooltip,
   submitButtonLabel = 'Update',
   idPrefix = 'update-budget',
+  ratePlaceholder = 'e.g. 30',
+  periodPlaceholder = 'e.g. 6',
+  patchTarget = 'cost',
 }: {
   locationId: string;
   yearMonth: string;
@@ -76,6 +83,10 @@ function UpdateBudgetModal({
   periodTooltip?: string;
   submitButtonLabel?: string;
   idPrefix?: string;
+  ratePlaceholder?: string;
+  periodPlaceholder?: string;
+  /** `labor` sends laborBudgetRate / laborReferencePeriodMonths (does not recalc cost total). */
+  patchTarget?: 'cost' | 'labor';
 }) {
   const [rate, setRate] = React.useState(() =>
     currentBudgetRate != null && Number.isFinite(currentBudgetRate)
@@ -100,33 +111,56 @@ function UpdateBudgetModal({
     try {
       let defaultBudgetRate: number | undefined;
       let defaultReferencePeriodMonths: number | undefined;
-      const settingsRes = await fetch('/api/dashboard/budget/settings');
-      if (settingsRes.ok) {
-        const { settings } = await settingsRes.json();
-        if (settings) {
-          defaultBudgetRate =
-            typeof settings.budgetRate === 'number'
-              ? settings.budgetRate
-              : undefined;
-          defaultReferencePeriodMonths =
-            typeof settings.referencePeriodMonths === 'number'
-              ? settings.referencePeriodMonths
-              : undefined;
+      if (patchTarget !== 'labor') {
+        const settingsRes = await fetch('/api/dashboard/budget/settings');
+        if (settingsRes.ok) {
+          const { settings } = await settingsRes.json();
+          if (settings) {
+            defaultBudgetRate =
+              typeof settings.budgetRate === 'number'
+                ? settings.budgetRate
+                : undefined;
+            defaultReferencePeriodMonths =
+              typeof settings.referencePeriodMonths === 'number'
+                ? settings.referencePeriodMonths
+                : undefined;
+          }
         }
       }
 
-      const res = await fetch(`/api/dashboard/budget/${locationId}`, {
+      const body =
+        patchTarget === 'labor'
+          ? {
+              yearMonth,
+              ...(rateNum != null
+                ? { laborBudgetRate: rateNum }
+                : { laborBudgetRate: DEFAULT_LABOR_RATE }),
+              ...(periodNum != null
+                ? { laborReferencePeriodMonths: periodNum }
+                : {
+                    laborReferencePeriodMonths:
+                      DEFAULT_LABOR_REFERENCE_MONTHS,
+                  }),
+            }
+          : {
+              yearMonth,
+              ...(rateNum != null
+                ? { budgetRate: rateNum }
+                : { budgetRate: defaultBudgetRate }),
+              ...(periodNum != null
+                ? { referencePeriodMonths: periodNum }
+                : { referencePeriodMonths: defaultReferencePeriodMonths }),
+            };
+
+      const patchUrl =
+        patchTarget === 'labor'
+          ? `/api/dashboard/labor-target/${locationId}`
+          : `/api/dashboard/budget/${locationId}`;
+
+      const res = await fetch(patchUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          yearMonth,
-          ...(rateNum != null
-            ? { budgetRate: rateNum }
-            : { budgetRate: defaultBudgetRate }),
-          ...(periodNum != null
-            ? { referencePeriodMonths: periodNum }
-            : { referencePeriodMonths: defaultReferencePeriodMonths }),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Update failed');
@@ -189,7 +223,7 @@ function UpdateBudgetModal({
               min={0}
               max={100}
               step={1}
-              placeholder="e.g. 30"
+              placeholder={ratePlaceholder}
               value={rate}
               onChange={(e) => setRate(e.target.value)}
             />
@@ -209,7 +243,7 @@ function UpdateBudgetModal({
               type="number"
               min={0}
               max={24}
-              placeholder="e.g. 6"
+              placeholder={periodPlaceholder}
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
             />
@@ -247,6 +281,9 @@ function UpdateBudgetButton({
   periodTooltip,
   submitButtonLabel,
   idPrefix,
+  ratePlaceholder,
+  periodPlaceholder,
+  patchTarget = 'cost',
 }: {
   locationId: string;
   yearMonth: string;
@@ -265,6 +302,9 @@ function UpdateBudgetButton({
   periodTooltip?: string;
   submitButtonLabel?: string;
   idPrefix?: string;
+  ratePlaceholder?: string;
+  periodPlaceholder?: string;
+  patchTarget?: 'cost' | 'labor';
 }) {
   const [open, setOpen] = React.useState(false);
   return (
@@ -291,6 +331,9 @@ function UpdateBudgetButton({
           periodTooltip={periodTooltip}
           submitButtonLabel={submitButtonLabel}
           idPrefix={idPrefix}
+          ratePlaceholder={ratePlaceholder}
+          periodPlaceholder={periodPlaceholder}
+          patchTarget={patchTarget}
         />
       )}
     </>

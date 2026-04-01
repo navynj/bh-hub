@@ -21,8 +21,8 @@ const BudgetLayout = async ({ children }: { children: React.ReactNode }) => {
 
   return (
     <>
-      <div className="flex gap-12">
-        <DashboardSideNav />
+      <div className="flex gap-12 max-sm:flex-col max-sm:gap-4">
+        {isOfficeOrAdmin && <DashboardSideNav />}
         <div className="flex-1">
           <div className="flex items-center justify-center gap-2 py-2">
             <Suspense fallback={null}>
