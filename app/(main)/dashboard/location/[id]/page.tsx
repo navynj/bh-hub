@@ -17,9 +17,6 @@ import RevenueCard from '@/features/dashboard/revenue/components/card/RevenueCar
 import {
   getCloverWeeklyRevenueData,
   getRevenuePeriodData,
-  resolveMonthlyTargetIncome,
-  type PrecomputedRevenueBudget,
-  type RevenueBudgetMetadata,
 } from '@/features/dashboard/revenue';
 import { getWeekOffsetContainingToday } from '@/features/dashboard/revenue/utils/week-range';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
@@ -122,48 +119,14 @@ const LocationPage = async ({
     );
   }
 
-  const budgetMeta: RevenueBudgetMetadata = {
-    referenceIncomeTotal: budget.referenceIncomeTotal,
-    referencePeriodMonthsUsed: budget.referencePeriodMonthsUsed,
-    budgetRateUsed:
-      typeof budget.budgetRateUsed === 'number'
-        ? budget.budgetRateUsed
-        : budget.budgetRateUsed != null
-          ? Number(budget.budgetRateUsed)
-          : null,
-  };
-
   const initialWeekOffset = getWeekOffsetContainingToday(yearMonth);
-  const [monthlyTargetIncome, laborTargetRow] = await Promise.all([
-    resolveMonthlyTargetIncome(
-      id,
-      yearMonth,
-      budget,
-      budgetMeta,
-      session?.user?.id ?? undefined,
-      context,
-    ),
-    getLaborTargetByLocationAndMonth(id, yearMonth),
-  ]);
-  const precomputed: PrecomputedRevenueBudget = {
-    budget,
-    monthlyTargetIncome,
-  };
+  const laborTargetRow = await getLaborTargetByLocationAndMonth(id, yearMonth);
   const [monthlyRevenue, weeklyRevenue, laborData] = await Promise.all([
-    getRevenuePeriodData(
-      id,
-      yearMonth,
-      context,
-      { period: 'monthly', weekOffset: 0, precomputed },
-      budgetMeta,
-      session?.user?.id ?? undefined,
-    ),
-    getCloverWeeklyRevenueData(
-      id,
-      yearMonth,
-      initialWeekOffset,
-      monthlyTargetIncome,
-    ),
+    getRevenuePeriodData(id, yearMonth, context, {
+      period: 'monthly',
+      weekOffset: 0,
+    }),
+    getCloverWeeklyRevenueData(id, yearMonth, initialWeekOffset),
     getLaborDashboardData(id, yearMonth, context, {
       referenceIncomeTotal: budget.referenceIncomeTotal,
       laborTarget: laborTargetRow,

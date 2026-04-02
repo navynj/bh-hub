@@ -4,24 +4,13 @@ import { eachDayOfInterval, format } from 'date-fns';
 import type { RevenuePeriodData } from '../components/types';
 import { weekRangeForMonth } from './week-range';
 
-function daysInMonth(yearMonth: string): number {
-  const [y, m] = yearMonth.split('-').map(Number);
-  if (!y || !m) return 30;
-  return new Date(y, m, 0).getDate();
-}
-
 const EMPTY_SEGMENT_KEY = '_clover_empty';
 const EMPTY_SEGMENT_LABEL = 'Clover sales';
 
-function emptyWeekBars(
-  weekStart: Date,
-  weekEnd: Date,
-  weeklyTarget: number,
-): RevenuePeriodData {
+function emptyWeekBars(weekStart: Date, weekEnd: Date): RevenuePeriodData {
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
   return {
     totalRevenue: 0,
-    targetRevenue: weeklyTarget,
     categories: [],
     dailyBars: days.map((day) => ({
       label: format(day, 'EEE').toUpperCase().slice(0, 3),
@@ -35,27 +24,21 @@ function emptyWeekBars(
 
 /**
  * Weekly Clover sales from the Clover Payments API (not QuickBooks P&L).
- * Budget target still uses the same monthly target as other revenue cards.
  */
 export async function getCloverWeeklyRevenueData(
   locationId: string,
   yearMonth: string,
   weekOffset: number,
-  monthlyTargetIncome: number,
 ): Promise<RevenuePeriodData> {
-  const dim = daysInMonth(yearMonth);
-  const weeklyTarget =
-    monthlyTargetIncome > 0 && dim > 0 ? (monthlyTargetIncome * 7) / dim : 0;
-
   const { weekStart, weekEnd } = weekRangeForMonth(yearMonth, weekOffset);
 
   if (!isCloverConfigured()) {
-    return emptyWeekBars(weekStart, weekEnd, weeklyTarget);
+    return emptyWeekBars(weekStart, weekEnd);
   }
 
   const merchantId = getCloverMerchantIdForLocation(locationId);
   if (!merchantId) {
-    return emptyWeekBars(weekStart, weekEnd, weeklyTarget);
+    return emptyWeekBars(weekStart, weekEnd);
   }
 
   const startMs = weekStart.getTime();
@@ -65,11 +48,11 @@ export async function getCloverWeeklyRevenueData(
   try {
     payments = await fetchCloverPaymentsInRange(merchantId, startMs, endMs);
   } catch {
-    return emptyWeekBars(weekStart, weekEnd, weeklyTarget);
+    return emptyWeekBars(weekStart, weekEnd);
   }
 
   if (payments.length === 0) {
-    return emptyWeekBars(weekStart, weekEnd, weeklyTarget);
+    return emptyWeekBars(weekStart, weekEnd);
   }
 
   const idToLabel = new Map<string, string>();
@@ -138,7 +121,6 @@ export async function getCloverWeeklyRevenueData(
 
   return {
     totalRevenue: weekTotalCents / 100,
-    targetRevenue: weeklyTarget,
     categories,
     dailyBars,
     dailyBarSegmentKeys: segmentKeys,

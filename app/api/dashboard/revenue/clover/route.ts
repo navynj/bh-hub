@@ -2,13 +2,6 @@
 
 import { getCloverWeeklyRevenueData } from '@/features/dashboard/revenue/utils/get-clover-weekly-revenue';
 import { weekRangeForMonth } from '@/features/dashboard/revenue/utils/week-range';
-import {
-  attachReferenceCosToBudgets,
-  getBudgetByLocationAndMonth,
-  type QuickBooksApiContext,
-} from '@/features/dashboard/budget';
-import { resolveMonthlyTargetIncome } from '@/features/dashboard/revenue/utils/get-revenue-data';
-import type { RevenueBudgetMetadata } from '@/features/dashboard/revenue/utils/get-revenue-data';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { toApiErrorResponse } from '@/lib/core/errors';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
@@ -63,47 +56,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const context: QuickBooksApiContext = {
-      baseUrl: new URL(request.url).origin,
-      cookie: request.headers.get('cookie'),
-    };
-
-    let budget = await getBudgetByLocationAndMonth(locationId, yearMonth);
-    if (budget && session.user.id) {
-      const [withRef] = await attachReferenceCosToBudgets(
-        [budget],
-        yearMonth,
-        session.user.id,
-        context,
-      );
-      budget = withRef;
-    }
-
-    const budgetMeta: RevenueBudgetMetadata | undefined = budget
-      ? {
-          referenceIncomeTotal: budget.referenceIncomeTotal,
-          referencePeriodMonthsUsed: budget.referencePeriodMonthsUsed,
-          budgetRateUsed:
-            budget.budgetRateUsed != null
-              ? Number(budget.budgetRateUsed)
-              : null,
-        }
-      : undefined;
-
-    const monthlyTargetIncome = await resolveMonthlyTargetIncome(
-      locationId,
-      yearMonth,
-      budget,
-      budgetMeta,
-      session.user.id,
-      context,
-    );
-
     const data = await getCloverWeeklyRevenueData(
       locationId,
       yearMonth,
       weekOffset,
-      monthlyTargetIncome,
     );
 
     const range = weekRangeForMonth(yearMonth, weekOffset);

@@ -80,8 +80,6 @@ export async function GET(request: NextRequest) {
         weekOffset,
         includeDailyBars: period === 'weekly' ? includeDailyBars : false,
       },
-      undefined,
-      session.user.id,
     );
 
     const range =

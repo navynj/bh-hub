@@ -24,13 +24,13 @@ const RevenueCard = ({
         <CardTitle className="w-full text-xl font-bold">Revenue</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* <WeeklyRevenueCard
+        <WeeklyRevenueCard
           key={yearMonth}
           locationId={locationId}
           yearMonth={yearMonth}
           initialData={weeklyRevenue}
           initialWeekOffset={initialWeekOffset}
-        /> */}
+        />
         <MonthlyRevenueCard data={monthlyRevenue} />
       </CardContent>
     </Card>
