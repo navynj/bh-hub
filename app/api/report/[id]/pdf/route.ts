@@ -1,4 +1,3 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import {
   getReportFromNotionById,
@@ -11,6 +10,7 @@ import {
   fetchProfitAndLossReportFromQb,
 } from '@/lib/quickbooks';
 import { prisma } from '@/lib/core/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * GET /api/report/[id]/pdf
@@ -117,12 +117,13 @@ export async function GET(
           : `attachment; filename="${pdfFileName}"`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error generating PDF:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       {
         error: 'Failed to generate PDF',
-        details: error.message || 'Unknown error',
+        details: message,
       },
       { status: 500 },
     );
