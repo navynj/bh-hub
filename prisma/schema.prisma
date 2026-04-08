@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["audit", "dashboard", "cost", "delivery", "inventory", "public"]
+  schemas  = ["audit", "cost", "dashboard", "delivery", "inventory", "order", "public"]
 }
 
 model Account {
@@ -117,6 +117,7 @@ enum UserRole {
   manager
   assistant
   employee
+  supplier
 
   @@schema("public")
 }
@@ -508,4 +509,94 @@ model DriverLocationUpdate {
   @@index([driverId, createdAt])
   @@map("driver_location_updates")
   @@schema("delivery")
+}
+
+// ===============================
+// ORDER (Purchase orders — migrated from Shopify Auto Purchase Orders export)
+// ===============================
+model PurchaseOrder {
+  id                    String                      @id @default(cuid())
+  /// Shopify app PO id from export `ID` column (stable key for idempotent import).
+  legacyExternalId      Int?                        @unique @map("legacy_external_id")
+  poNumber              String                      @map("po_number")
+  status                String
+  currency              String
+  isAuto                Boolean                     @default(false) @map("is_auto")
+  displayTaxColumn      Boolean                     @default(false) @map("display_tax_column")
+  comment               String?                     @db.Text
+  authorizedBy          String?                     @map("authorized_by")
+  unitsOrdered          Int?                        @map("units_ordered")
+  dateCreated           DateTime?                   @map("date_created") @db.Date
+  expectedDate          DateTime?                   @map("expected_date") @db.Date
+  subtotalPrice         Decimal?                    @map("subtotal_price") @db.Decimal(14, 2)
+  discount              Decimal?                    @map("discount") @db.Decimal(14, 2)
+  discountReason        String?                     @map("discount_reason") @db.Text
+  shippingHandlingPrice Decimal?                    @map("shipping_handling_price") @db.Decimal(14, 2)
+  totalTaxPrice         Decimal?                    @map("total_tax_price") @db.Decimal(14, 2)
+  totalPrice            Decimal?                    @map("total_price") @db.Decimal(14, 2)
+  sourceCreatedAt       DateTime?                   @map("source_created_at") @db.Timestamptz
+  sourceUpdatedAt       DateTime?                   @map("source_updated_at") @db.Timestamptz
+  completedAt           DateTime?                   @map("completed_at") @db.Timestamptz
+  supplierExternalId    Int?                        @map("supplier_external_id")
+  supplierCompany       String?                     @map("supplier_company")
+  supplierContactName   String?                     @map("supplier_contact_name")
+  /// One PO can combine multiple Shopify orders — contact/addresses live per linked order.
+  shopifyOrderRefs      PurchaseOrderShopifyOrder[]
+  lineItems             PurchaseOrderLineItem[]
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([poNumber])
+  @@index([status])
+  @@index([supplierExternalId])
+  @@map("purchase_orders")
+  @@schema("order")
+}
+
+/// One row per Shopify order linked to a PO (combined PO ⇒ multiple rows). Customer/address match that order.
+model PurchaseOrderShopifyOrder {
+  id              String        @id @default(cuid())
+  purchaseOrderId String        @map("purchase_order_id")
+  /// Display ref as in Shopify/export (e.g. `#1689`). Import uses `(unknown)` when the CSV had no order #.
+  orderNumber     String        @map("shopify_order_number")
+  customerPhone   String?       @map("shopify_order_customer_phone")
+  customerEmail   String?       @map("shopify_order_customer_email")
+  billingAddress  Json?         @map("billing_address")
+  shippingAddress Json?         @map("shipping_address")
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseOrderId, orderNumber])
+  @@index([orderNumber])
+  @@map("purchase_order_shopify_orders")
+  @@schema("order")
+}
+
+model PurchaseOrderLineItem {
+  id                      String        @id @default(cuid())
+  purchaseOrderId         String        @map("purchase_order_id")
+  /// Export `Product ID` column (may repeat or be absent).
+  legacyLineExternalId    Int?          @map("legacy_line_external_id")
+  /// Row order within the PO in the export file.
+  sequence                Int           @map("sequence")
+  quantity                Int
+  quantityReceived        Int           @default(0) @map("quantity_received")
+  supplierRef             String?       @map("supplier_ref") @db.Text
+  taxPercent              Decimal?      @map("tax_percent") @db.Decimal(9, 4)
+  sku                     String?
+  variantTitle            String?       @map("variant_title")
+  productTitle            String?       @map("product_title") @db.Text
+  shopifyInventoryItemGid String?       @map("shopify_inventory_item_gid")
+  shopifyVariantGid       String?       @map("shopify_variant_gid")
+  shopifyProductGid       String?       @map("shopify_product_gid")
+  isCustom                Boolean       @default(false) @map("is_custom")
+  itemPrice               Decimal?      @map("item_price") @db.Decimal(14, 2)
+  lineSubtotalPrice       Decimal?      @map("line_subtotal_price") @db.Decimal(14, 2)
+  lineTotalTaxPrice       Decimal?      @map("line_total_tax_price") @db.Decimal(14, 2)
+  productProperties       String?       @map("product_properties") @db.Text
+  purchaseOrder           PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseOrderId, sequence])
+  @@index([purchaseOrderId, legacyLineExternalId])
+  @@map("purchase_order_line_items")
+  @@schema("order")
 }
