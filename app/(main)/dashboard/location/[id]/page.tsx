@@ -13,7 +13,8 @@ import {
   getLaborDashboardData,
   getLaborTargetByLocationAndMonth,
 } from '@/features/dashboard/labor';
-import RevenueCard from '@/features/dashboard/revenue/components/card/RevenueCard';
+import MonthlyRevenueCard from '@/features/dashboard/revenue/components/card/MonthlyRevenueCard';
+import WeeklyRevenueCard from '@/features/dashboard/revenue/components/card/WeeklyRevenueCard';
 import {
   getCloverWeeklyRevenueData,
   getRevenuePeriodData,
@@ -134,35 +135,39 @@ const LocationPage = async ({
   ]);
 
   return (
-    <div className="grid max-lg:grid-cols-1 grid-cols-3 gap-4">
-      <RevenueCard
-        locationId={id}
-        yearMonth={yearMonth}
-        monthlyRevenue={monthlyRevenue}
-        weeklyRevenue={weeklyRevenue}
-        initialWeekOffset={initialWeekOffset}
-      />
-      {/* Cost (Budget) */}
-      {budget ? (
-        <BudgetCard
-          budget={budget}
-          isOfficeOrAdmin={isOfficeOrAdmin}
+    <div className="grid gap-4 max-lg:grid-cols-1 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:items-start">
+      <div className="flex min-w-0 flex-col gap-4">
+        <MonthlyRevenueCard data={monthlyRevenue} />
+        {budget ? (
+          <BudgetCard
+            budget={budget}
+            isOfficeOrAdmin={isOfficeOrAdmin}
+            yearMonth={yearMonth}
+            needsReconnect={budget.error === QB_REFRESH_EXPIRED}
+          />
+        ) : (
+          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            No budget for this location this month.
+            <br />
+            Please contact the administrator.
+          </div>
+        )}
+        <LaborCard
+          data={laborData}
+          locationId={id}
           yearMonth={yearMonth}
-          needsReconnect={budget.error === QB_REFRESH_EXPIRED}
+          isOfficeOrAdmin={isOfficeOrAdmin}
         />
-      ) : (
-        <div className="text-muted-foreground">
-          No budget for this location this month.
-          <br />
-          Please contact to the administrator.
-        </div>
-      )}
-      <LaborCard
-        data={laborData}
-        locationId={id}
-        yearMonth={yearMonth}
-        isOfficeOrAdmin={isOfficeOrAdmin}
-      />
+      </div>
+      <div className="min-w-0 lg:min-h-0">
+        <WeeklyRevenueCard
+          key={yearMonth}
+          locationId={id}
+          yearMonth={yearMonth}
+          initialData={weeklyRevenue}
+          initialWeekOffset={initialWeekOffset}
+        />
+      </div>
     </div>
   );
 };

@@ -1,17 +1,13 @@
 'use client';
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import { WeekRangeNav } from '@/components/ui/control/week-range-nav';
-import { cn } from '@/lib/utils';
-import { ChevronDown } from 'lucide-react';
-import { useCallback, useState } from 'react';
-import RevenueChart from '../chart/RevenueChart';
+import { cn, formatCurrency } from '@/lib/utils';
+import { format, parseISO } from 'date-fns';
+import { useCallback, useEffect, useState } from 'react';
 import RevenueDailyBarChart from '../chart/RevenueDailyBarChart';
-import RevenueSummary from '../chart/RevenueSummary';
+import HourlySalesHeatmap from '../chart/HourlySalesHeatmap';
+import MenuPerformanceSection from '../chart/MenuPerformanceSection';
+import WeeklyCloverStatsRow from '../chart/WeeklyCloverStatsRow';
 import type { RevenuePeriodData } from '../types';
 import WeeklyRevenueSectionSkeleton from './WeeklyRevenueSectionSkeleton';
 
@@ -30,8 +26,13 @@ export default function WeeklyRevenueCard({
   initialWeekOffset,
   className,
 }: WeeklyRevenueCardProps) {
-  const [open, setOpen] = useState(true);
   const [data, setData] = useState<RevenuePeriodData>(initialData);
+
+  useEffect(() => {
+    if (data.cloverError) {
+      console.error('[WeeklyRevenueCard] Clover error:', data.cloverError);
+    }
+  }, [data.cloverError]);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(
@@ -73,24 +74,12 @@ export default function WeeklyRevenueCard({
   const showWeeklySkeleton = loading;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className={cn(className)}>
+    <div className={cn(className)}>
       <div className="rounded-lg border bg-background/80 p-3 sm:p-4">
         <div className="flex max-xl:flex-col gap-2 flex-row items-center justify-between gap-4">
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-2 text-left font-bold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <ChevronDown
-                className={cn(
-                  'size-4 shrink-0 text-muted-foreground transition-transform duration-200',
-                  !open && '-rotate-90',
-                )}
-                aria-hidden
-              />
-              <span>Weekly Clover Sales</span>
-            </button>
-          </CollapsibleTrigger>
+          <h2 className="min-w-0 flex-1 text-base font-bold">
+            Weekly Clover Sales
+          </h2>
           {yearMonth != null && yearMonth !== '' && (
             <WeekRangeNav
               key={`${yearMonth}-${initialWeekOffset}`}
@@ -104,39 +93,121 @@ export default function WeeklyRevenueCard({
           )}
         </div>
 
-        <CollapsibleContent className="overflow-hidden">
-          <div
-            className={cn(
-              'mt-4 space-y-4',
-              showWeeklySkeleton && 'pointer-events-none',
-            )}
-          >
-            {showWeeklySkeleton ? (
-              <WeeklyRevenueSectionSkeleton />
-            ) : (
-              <>
-                <div className="flex flex-col gap-4">
-                  <RevenueSummary totalRevenue={data.totalRevenue} />
-                  <RevenueChart categories={data.categories} />
+        <div
+          className={cn(
+            'mt-4 space-y-4',
+            showWeeklySkeleton && 'pointer-events-none',
+          )}
+        >
+          {showWeeklySkeleton ? (
+            <WeeklyRevenueSectionSkeleton />
+          ) : data.cloverNotConfigured ? (
+            <p className="text-sm text-muted-foreground">
+              No Clover credentials configured for this location. Set the{' '}
+              <span className="font-medium text-foreground">Clover Token</span>{' '}
+              and{' '}
+              <span className="font-medium text-foreground">Merchant ID</span>{' '}
+              on the Locations page.
+            </p>
+          ) : data.cloverError ? (
+            <p className="text-sm text-muted-foreground">
+              Clover error — check the browser console for details.
+            </p>
+          ) : (
+            <div className="space-y-5">
+              {/* ── Row 1: Stats (full width) ── */}
+              <WeeklyCloverStatsRow
+                totalRevenue={data.totalRevenue}
+                prevWeekRevenue={data.prevWeekRevenue}
+                transactionCount={data.transactionCount}
+                avgTicketSize={data.avgTicketSize}
+              />
+
+              {/* ── Row 2: Bar chart + daily list | Menu performance ── */}
+              {data.dailyBars &&
+                data.dailyBars.length > 0 &&
+                data.dailyBarSegmentKeys &&
+                data.dailyBarSegmentKeys.length > 0 &&
+                data.dailyBarSegmentLabels &&
+                data.dailyBarSegmentLabels.length ===
+                  data.dailyBarSegmentKeys.length && (
+                  <div className="grid gap-4 max-lg:grid-cols-1 grid-cols-2">
+                    {/* Left: bar chart + daily list */}
+                    <div className="space-y-3">
+                      <RevenueDailyBarChart
+                        rows={data.dailyBars}
+                        segmentKeys={data.dailyBarSegmentKeys}
+                        segmentLabels={data.dailyBarSegmentLabels}
+                      />
+                      <div className="divide-y rounded-lg border text-sm">
+                        {data.dailyBars.map((row) => {
+                          const pct =
+                            data.totalRevenue > 0
+                              ? (row.total / data.totalRevenue) * 100
+                              : 0;
+                          return (
+                            <div
+                              key={row.date}
+                              className="flex items-center gap-3 px-3 py-2"
+                            >
+                              <span className="w-8 shrink-0 font-medium">
+                                {row.label}
+                              </span>
+                              <span className="text-xs text-muted-foreground w-16 shrink-0">
+                                {format(parseISO(row.date), 'MMM d')}
+                              </span>
+                              <div className="flex flex-1 items-baseline justify-end gap-2">
+                                <span
+                                  className={cn(
+                                    'tabular-nums',
+                                    row.total === 0
+                                      ? 'text-muted-foreground'
+                                      : 'font-medium',
+                                  )}
+                                >
+                                  {row.total === 0
+                                    ? '—'
+                                    : formatCurrency(row.total)}
+                                </span>
+                                {pct > 0 && (
+                                  <span className="text-xs text-muted-foreground tabular-nums">
+                                    {pct.toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right: menu performance */}
+                    {data.topMenuItems && data.topMenuItems.length > 0 && (
+                      <MenuPerformanceSection
+                        topMenuItems={data.topMenuItems}
+                        bottomMenuItems={data.bottomMenuItems ?? []}
+                        seasonalMenuItems={data.seasonalMenuItems}
+                      />
+                    )}
+                  </div>
+                )}
+
+              {/* ── Row 3: Hourly heatmap (full width) ── */}
+              {data.dailyBars && data.dailyBars.length > 0 && (
+                <div className="rounded-lg border p-3">
+                  <HourlySalesHeatmap
+                    dayHourlySales={data.dayHourlySales ?? []}
+                    weekDates={data.dailyBars.map((r) => ({
+                      date: r.date,
+                      label: r.label,
+                    }))}
+                  />
                 </div>
-                {data.dailyBars &&
-                  data.dailyBars.length > 0 &&
-                  data.dailyBarSegmentKeys &&
-                  data.dailyBarSegmentKeys.length > 0 &&
-                  data.dailyBarSegmentLabels &&
-                  data.dailyBarSegmentLabels.length ===
-                    data.dailyBarSegmentKeys.length && (
-                    <RevenueDailyBarChart
-                      rows={data.dailyBars}
-                      segmentKeys={data.dailyBarSegmentKeys}
-                      segmentLabels={data.dailyBarSegmentLabels}
-                    />
-                  )}
-              </>
-            )}
-          </div>
-        </CollapsibleContent>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-    </Collapsible>
+    </div>
   );
 }

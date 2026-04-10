@@ -185,6 +185,8 @@ export const locationPatchSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM')
     .nullish(),
   showBudget: z.boolean().optional(),
+  cloverMerchantId: z.string().nullable().optional(),
+  cloverToken: z.string().nullable().optional(),
 });
 
 export type OnboardingPostBody = z.infer<typeof onboardingPostSchema>;

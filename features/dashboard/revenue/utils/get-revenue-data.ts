@@ -91,12 +91,14 @@ async function fetchDailyBars(
         const dayRows = getTopLevelCategoryRows(incomeByCategory ?? []);
         return {
           label: format(day, 'EEE').toUpperCase().slice(0, 3),
+          date: d,
           dayRows,
           total: incomeTotal,
         };
       } catch {
         return {
           label: format(day, 'EEE').toUpperCase().slice(0, 3),
+          date: d,
           dayRows: [] as IncomeTopRow[],
           total: 0,
         };
@@ -151,6 +153,7 @@ async function fetchDailyBars(
       }
       return {
         label: day.label,
+        date: day.date,
         segments,
         total: day.total,
       };

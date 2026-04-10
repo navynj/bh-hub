@@ -6,6 +6,7 @@ import HeaderNavItem from './HeaderNavItem';
 import {
   getCanSeeBudgetAndReports,
   getCanSeeDeliveryAndCost,
+  getCanSeeOrderSection,
   getOfficeOrAdmin,
 } from '@/lib/auth';
 
@@ -36,6 +37,9 @@ const HeaderNav = ({
             <HeaderNavItem href="/delivery">Delivery</HeaderNavItem>
             {/* <HeaderNavItem href="/cost">Cost</HeaderNavItem> */}
           </>
+        )}
+        {getCanSeeOrderSection(role) && (
+          <HeaderNavItem href="/order">Order</HeaderNavItem>
         )}
       </div>
       {getOfficeOrAdmin(role) && (

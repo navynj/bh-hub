@@ -100,3 +100,14 @@ export function getCanSeeBudgetAndReports(
 ): boolean {
   return getOfficeOrAdmin(role) || role === 'manager';
 }
+
+export function getCanSeeOrderSection(
+  role: string | null | undefined,
+): boolean {
+  return (
+    getOfficeOrAdmin(role) ||
+    role === 'assistant' ||
+    role === 'manager' ||
+    role === 'supplier'
+  );
+}

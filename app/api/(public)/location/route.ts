@@ -88,6 +88,8 @@ export async function GET() {
       realmId: true,
       startYearMonth: true,
       showBudget: true,
+      cloverMerchantId: true,
+      cloverToken: true,
       realm: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'asc' },
@@ -102,6 +104,8 @@ export async function GET() {
     realmName: loc.realm?.name ?? null,
     startYearMonth: loc.startYearMonth,
     showBudget: loc.showBudget,
+    cloverMerchantId: loc.cloverMerchantId,
+    cloverToken: loc.cloverToken,
   }));
 
   return NextResponse.json(rows);

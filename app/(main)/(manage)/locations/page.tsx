@@ -13,6 +13,8 @@ type LocationRow = {
   realmName: string | null;
   startYearMonth: string | null;
   showBudget: boolean;
+  cloverMerchantId: string | null;
+  cloverToken: string | null;
 };
 
 export default async function LocationsPage() {

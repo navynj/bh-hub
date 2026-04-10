@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { Check, Pencil, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Pencil, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -43,6 +43,8 @@ export type LocationRow = {
   realmName: string | null;
   startYearMonth: string | null;
   showBudget: boolean;
+  cloverMerchantId: string | null;
+  cloverToken: string | null;
 };
 
 type LocationsContentProps = {
@@ -194,6 +196,31 @@ export function LocationsContent({
         />
       ),
     },
+    {
+      accessorKey: 'cloverMerchantId',
+      header: 'Clover Merchant ID',
+      cell: ({ row }: { row: Row<LocationRow> }) => (
+        <EditableCell
+          row={row}
+          field="cloverMerchantId"
+          onSave={(v) =>
+            updateLocation(row.original, 'cloverMerchantId', v === '' ? null : v)
+          }
+        />
+      ),
+    },
+    {
+      accessorKey: 'cloverToken',
+      header: 'Clover Token',
+      cell: ({ row }: { row: Row<LocationRow> }) => (
+        <CloverTokenCell
+          value={row.original.cloverToken}
+          onSave={(v) =>
+            updateLocation(row.original, 'cloverToken', v === '' ? null : v)
+          }
+        />
+      ),
+    },
   ];
 
   return (
@@ -327,6 +354,98 @@ function StartYearMonthCell({
   );
 }
 
+function CloverTokenCell({
+  value,
+  onSave,
+}: {
+  value: string | null;
+  onSave: (value: string) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const handleEdit = () => {
+    setDraft('');
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    onSave(draft.trim());
+    setIsEditing(false);
+    setDraft('');
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setDraft('');
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex max-w-[260px] items-center gap-1">
+        <Input
+          className="h-8 flex-1 min-w-0 font-mono text-xs"
+          type="text"
+          value={draft}
+          autoFocus
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSave();
+            if (e.key === 'Escape') handleCancel();
+          }}
+          placeholder="Paste token…"
+        />
+        <div className="flex">
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Save" onClick={handleSave}>
+            <Check className="size-3.5" />
+          </Button>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Cancel" onClick={handleCancel}>
+            <X className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const isSet = Boolean(value);
+  const display = isSet
+    ? revealed
+      ? value!
+      : '••••••••••••••••'
+    : '—';
+
+  return (
+    <div className="flex max-w-[260px] items-center gap-1">
+      <span className={cn('min-w-0 truncate font-mono text-xs', !isSet && 'text-muted-foreground')}>
+        {display}
+      </span>
+      {isSet && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={revealed ? 'Hide token' : 'Reveal token'}
+          className="opacity-50"
+          onClick={() => setRevealed((v) => !v)}
+        >
+          {revealed ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Edit token"
+        className="opacity-50"
+        onClick={handleEdit}
+      >
+        <Pencil className="size-3.5" />
+      </Button>
+    </div>
+  );
+}
+
 function EditableCell({
   row,
   field,
@@ -334,7 +453,7 @@ function EditableCell({
   className,
 }: {
   row: Row<LocationRow>;
-  field: 'code' | 'name' | 'classId';
+  field: 'code' | 'name' | 'classId' | 'cloverMerchantId';
   onSave: (value: string) => void;
 } & ClassName) {
   const current = row.original[field] ?? '';

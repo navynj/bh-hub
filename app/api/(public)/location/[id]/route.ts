@@ -35,6 +35,8 @@ export async function PATCH(
     realmId?: string;
     startYearMonth?: string | null;
     showBudget?: boolean;
+    cloverMerchantId?: string | null;
+    cloverToken?: string | null;
   } = {};
   if (body.code !== undefined) updateData.code = body.code;
   if (body.name !== undefined) updateData.name = body.name;
@@ -42,6 +44,8 @@ export async function PATCH(
   if (body.realmId !== undefined) updateData.realmId = body.realmId;
   if (body.startYearMonth !== undefined) updateData.startYearMonth = body.startYearMonth ?? null;
   if (body.showBudget !== undefined) updateData.showBudget = body.showBudget;
+  if (body.cloverMerchantId !== undefined) updateData.cloverMerchantId = body.cloverMerchantId ?? null;
+  if (body.cloverToken !== undefined) updateData.cloverToken = body.cloverToken ?? null;
 
   await prisma.location.update({
     where: { id },
