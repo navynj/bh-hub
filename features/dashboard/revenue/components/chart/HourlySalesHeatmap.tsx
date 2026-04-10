@@ -7,7 +7,8 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart';
 import { formatCurrency } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
+import { parseLocalDate } from '@/features/dashboard/revenue/utils/week-range';
 import {
   Bar,
   BarChart,
@@ -116,7 +117,7 @@ function HeatTooltipBody({
   return (
     <div className="rounded-lg border bg-background px-3 py-2 shadow-lg text-xs space-y-0.5">
       <p className="font-semibold text-foreground">
-        {format(parseISO(d.date), 'EEE, MMM d')} · {fmtHourRangeLabel(d.hour)}
+        {format(parseLocalDate(d.date), 'EEE, MMM d')} · {fmtHourRangeLabel(d.hour)}
       </p>
       <p className="text-muted-foreground">
         Revenue:{' '}
@@ -208,7 +209,7 @@ export default function HourlySalesHeatmap({
       <div className="flex items-baseline gap-2">
         <span className="text-sm font-semibold">Hourly Heatmap</span>
         <span className="text-xs text-muted-foreground">
-          Recharts · 06:00–22:00 (local) · green = higher revenue
+          Clover net sales · 06:00–22:00 (local) · green = higher
         </span>
       </div>
 
@@ -266,7 +267,7 @@ export default function HourlySalesHeatmap({
 
       <div className="space-y-1 pl-[28px] pr-0.5 min-w-0">
         <p className="text-[10px] font-medium text-muted-foreground">
-          Weekly total per hour (06:00–22:00, local)
+          Net sales per hour · 06:00–22:00 (local)
         </p>
         <ChartContainer
           config={weeklyBarChartConfig}

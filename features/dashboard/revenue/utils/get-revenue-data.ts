@@ -170,6 +170,34 @@ async function fetchDailyBars(
 }
 
 /**
+ * Year-to-date revenue: Jan 1 to the last day of `yearMonth` (or today for the current month).
+ * Uses the same P&L cache as monthly revenue — January's fetch is always deduplicated.
+ */
+export async function getAnnualRevenuePeriodData(
+  locationId: string,
+  yearMonth: string,
+  context: QuickBooksApiContext,
+): Promise<RevenuePeriodData> {
+  const year = yearMonth.slice(0, 4);
+  const startDate = `${year}-01-01`;
+  const { endDate } = referenceCurrentMonthRange(yearMonth);
+  const { report } = await fetchPnlReport(
+    context.baseUrl,
+    context.cookie,
+    locationId,
+    startDate,
+    endDate,
+    'Accrual',
+  );
+  const { incomeTotal, incomeByCategory } = getIncomeWithCategoriesFromPnlReport(report);
+  const rows = getTopLevelCategoryRows(incomeByCategory ?? []);
+  return {
+    totalRevenue: incomeTotal,
+    categories: incomeRowsToCategories(rows),
+  };
+}
+
+/**
  * Load revenue period data: P&L Income (total + top-level income accounts).
  */
 export async function getRevenuePeriodData(

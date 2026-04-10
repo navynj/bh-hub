@@ -9,19 +9,27 @@ export type CloverCategory = {
 type CategoriesResponse = { elements?: { id?: string; name?: string }[] };
 type ItemsResponse = { elements?: { id?: string }[] };
 
-/** Returns all menu categories for the merchant. */
+const CATEGORY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour — categories change rarely
+const categoryCache = new Map<string, { data: CloverCategory[]; expiresAt: number }>();
+
+/** Returns all menu categories for the merchant. Results are cached in-process for 1 hour. */
 export async function fetchCloverCategories(
   merchantId: string,
   token: string,
 ): Promise<CloverCategory[]> {
+  const cached = categoryCache.get(merchantId);
+  if (cached && Date.now() < cached.expiresAt) return cached.data;
+
   const base = getCloverApiBaseUrl();
   const url = `${base}/v3/merchants/${merchantId}/categories?limit=200`;
   const res = await cloverFetch(url, token);
-  if (!res.ok) return [];
+  if (!res.ok) return cached?.data ?? []; // return stale on error rather than empty
   const json = (await res.json()) as CategoriesResponse;
-  return (json.elements ?? [])
+  const data = (json.elements ?? [])
     .filter((c): c is { id: string; name: string } => !!c.id && !!c.name)
     .map((c) => ({ id: c.id, name: c.name }));
+  categoryCache.set(merchantId, { data, expiresAt: Date.now() + CATEGORY_CACHE_TTL_MS });
+  return data;
 }
 
 /** Returns item IDs that belong to the given category. */

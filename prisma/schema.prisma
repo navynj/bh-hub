@@ -77,6 +77,8 @@ model Location {
   cloverToken      String?       @map("clover_token")
   budgets          Budget[]
   laborTargets     LaborTarget[]
+  revenueAnnualGoals  RevenueAnnualGoal[]
+  revenueMonthTargets RevenueMonthTarget[]
   realm            Realm         @relation(fields: [realmId], references: [id])
   users            User[]
 
@@ -179,6 +181,42 @@ model LaborTarget {
 
   @@unique([locationId, yearMonth])
   @@map("labor_targets")
+  @@schema("dashboard")
+}
+
+/// Calendar-year revenue goal per location (can change year over year).
+model RevenueAnnualGoal {
+  id           String   @id @default(cuid())
+  locationId   String   @map("location_id")
+  calendarYear Int      @map("calendar_year")
+  goalAmount   Decimal  @map("goal_amount") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  location     Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, calendarYear])
+  @@map("revenue_annual_goals")
+  @@schema("dashboard")
+}
+
+/**
+ * Clover weekday/holiday mix for a specific dashboard month (YYYY-MM).
+ * `referencePeriodMonths` = full calendar months before `appliesYearMonth` (excluded) for Clover lookback; 0 = no mix / no targets from this row.
+ * `refYearMonth` kept for legacy rows; new writes mirror `appliesYearMonth`.
+ */
+model RevenueMonthTarget {
+  id                      String   @id @default(cuid())
+  locationId              String   @map("location_id")
+  appliesYearMonth        String   @map("applies_year_month")
+  referencePeriodMonths   Int      @default(12) @map("reference_period_months")
+  sharesJson              String   @map("shares_json") @db.Text
+  computedAt              DateTime @map("computed_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  location                Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, appliesYearMonth])
+  @@map("revenue_month_targets")
   @@schema("dashboard")
 }
 

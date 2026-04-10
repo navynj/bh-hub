@@ -8,6 +8,8 @@ type WeeklyCloverStatsRowProps = {
   prevWeekRevenue: number | undefined;
   transactionCount: number | undefined;
   avgTicketSize: number | undefined;
+  /** When WoW uses partial week (through today), short explanation under the % */
+  wowCompareWeekdaySpanLabel?: string;
 };
 
 function StatCard({
@@ -49,9 +51,14 @@ function StatCard({
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-lg font-bold tabular-nums">{value}</span>
       {sub != null && (
-        <span className={cn('flex items-center gap-1 text-xs tabular-nums', subClassName)}>
+        <div
+          className={cn(
+            'flex flex-col items-start gap-0.5 text-xs tabular-nums',
+            subClassName,
+          )}
+        >
           {sub}
-        </span>
+        </div>
       )}
     </div>
   );
@@ -62,6 +69,7 @@ export default function WeeklyCloverStatsRow({
   prevWeekRevenue,
   transactionCount,
   avgTicketSize,
+  wowCompareWeekdaySpanLabel,
 }: WeeklyCloverStatsRowProps) {
   let wowNode: React.ReactNode = null;
   let wowClass = 'text-muted-foreground';
@@ -74,7 +82,8 @@ export default function WeeklyCloverStatsRow({
       wowNode = (
         <>
           <TrendingUp className="size-3 shrink-0" />
-          {sign}{diff.toFixed(1)}% vs last week
+          {sign}
+          {diff.toFixed(1)}% vs last week
         </>
       );
     } else {
@@ -82,7 +91,8 @@ export default function WeeklyCloverStatsRow({
       wowNode = (
         <>
           <TrendingDown className="size-3 shrink-0" />
-          {sign}{diff.toFixed(1)}% vs last week
+          {sign}
+          {diff.toFixed(1)}% vs last week
         </>
       );
     }
@@ -94,15 +104,39 @@ export default function WeeklyCloverStatsRow({
   const hasSubStats =
     transactionCount != null || (avgTicketSize != null && avgTicketSize > 0);
 
+  const wowSub =
+    wowNode != null || wowCompareWeekdaySpanLabel ? (
+      <div className="flex gap-2 items-center">
+        {wowNode != null && (
+          <span
+            className={cn(
+              'flex items-center gap-1 tabular-nums text-xs',
+              wowClass,
+            )}
+          >
+            {wowNode}
+
+            {wowCompareWeekdaySpanLabel && (
+              <>
+                {' '}
+                <span className="text-[10px] leading-tight font-normal text-muted-foreground">
+                  ({wowCompareWeekdaySpanLabel})
+                </span>
+              </>
+            )}
+          </span>
+        )}
+      </div>
+    ) : null;
+
   return (
     <div className="flex flex-row items-stretch gap-3">
       <div className="min-w-0 flex-1">
         <StatCard
           className="h-full"
-          label="Weekly Sales"
+          label="Weekly Net Sales"
           value={formatCurrency(totalRevenue)}
-          sub={wowNode}
-          subClassName={wowClass}
+          sub={wowSub}
         />
       </div>
       {hasSubStats && (

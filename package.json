@@ -31,6 +31,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "date-holidays": "^3.26.13",
     "dnd-kit": "^0.0.2",
     "dotenv": "^17.2.4",
     "intuit-oauth": "^4.2.2",

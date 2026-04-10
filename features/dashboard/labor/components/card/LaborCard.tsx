@@ -103,7 +103,10 @@ export default function LaborCard({
         )}
       </CardHeader>
       <CardContent className="space-y-5">
-        {/* <LaborTimeNeeded /> */}
+        <LaborTimeNeeded
+          locationId={locationId}
+          yearMonth={yearMonth}
+        />
         <div className="flex flex-col gap-4">
           <LaborSummary
             totalLabor={data.totalLabor}

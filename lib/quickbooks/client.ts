@@ -2,6 +2,7 @@
  * Call GET /api/quickbooks/pnl from client/server to get P&L report (e.g. for budget).
  */
 
+import { cache } from 'react';
 import { AppError } from '@/lib/core/errors';
 import type { PnlReportData } from './parser';
 
@@ -15,7 +16,13 @@ export type PnlApiResponse = {
   report: PnlReportData;
 };
 
-export async function fetchPnlReport(
+/**
+ * Fetch a QuickBooks P&L report via the internal API route.
+ * Wrapped with React.cache() so identical calls within one SSR render
+ * (e.g. budget COS + monthly revenue + labor all requesting the same month)
+ * are deduplicated to a single network request.
+ */
+export const fetchPnlReport = cache(async function fetchPnlReport(
   baseUrl: string,
   cookie: string | null,
   locationId: string,
@@ -46,4 +53,4 @@ export async function fetchPnlReport(
     throw new AppError('QuickBooks P&L API returned no report');
   }
   return data;
-}
+});

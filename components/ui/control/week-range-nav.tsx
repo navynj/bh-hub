@@ -2,13 +2,18 @@
 
 import { Button } from '@/components/ui/button';
 import {
+  clampWeekOffsetForDashboard,
   getWeekOffsetContainingToday,
+  getWeekOffsetsIntersectingMonth,
+  parseLocalDate,
+  weekStartIsoForMonthOffset,
+  zonedTodayIsoForClover,
   WEEK_STARTS_ON,
 } from '@/features/dashboard/revenue/utils/week-range';
 import { cn } from '@/lib/utils';
-import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from 'date-fns';
+import { addWeeks, endOfWeek, format, startOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export { WEEK_STARTS_ON };
 
@@ -41,14 +46,20 @@ export function getWeekRangeForYearMonth(
   endDate: string;
   rangeLabel: string;
 } {
-  const monthStart = parseISO(`${yearMonth}-01`);
-  const baseWeekStart = startOfWeek(monthStart, {
-    weekStartsOn: WEEK_STARTS_ON,
-  });
-  const weekStart = addWeeks(baseWeekStart, weekOffset);
-  const weekEnd = endOfWeek(weekStart, { weekStartsOn: WEEK_STARTS_ON });
-  const startDate = format(weekStart, 'yyyy-MM-dd');
-  const endDate = format(weekEnd, 'yyyy-MM-dd');
+  const { weekStart, weekEnd, startDate, endDate } = (() => {
+    const monthStart = parseLocalDate(`${yearMonth}-01`);
+    const baseWeekStart = startOfWeek(monthStart, {
+      weekStartsOn: WEEK_STARTS_ON,
+    });
+    const ws = addWeeks(baseWeekStart, weekOffset);
+    const we = endOfWeek(ws, { weekStartsOn: WEEK_STARTS_ON });
+    return {
+      weekStart: ws,
+      weekEnd: we,
+      startDate: format(ws, 'yyyy-MM-dd'),
+      endDate: format(we, 'yyyy-MM-dd'),
+    };
+  })();
   const rangeLabel = `${format(weekStart, 'MMMM d')} ~ ${format(weekEnd, 'MMMM d')}`;
   return { weekStart, weekEnd, startDate, endDate, rangeLabel };
 }
@@ -69,9 +80,12 @@ export function WeekRangeNav({
   initialWeekOffset,
 }: WeekRangeNavProps) {
   const [weekOffset, setWeekOffset] = useState(() =>
-    initialWeekOffset !== undefined
-      ? initialWeekOffset
-      : getWeekOffsetContainingToday(yearMonth),
+    clampWeekOffsetForDashboard(
+      yearMonth,
+      initialWeekOffset !== undefined
+        ? initialWeekOffset
+        : getWeekOffsetContainingToday(yearMonth),
+    ),
   );
   const onWeekChangeRef = useRef(onWeekChange);
 
@@ -80,6 +94,19 @@ export function WeekRangeNav({
   }, [onWeekChange]);
 
   const { rangeLabel } = getWeekRangeForYearMonth(yearMonth, weekOffset);
+
+  const monthBounds = useMemo(
+    () => getWeekOffsetsIntersectingMonth(yearMonth),
+    [yearMonth],
+  );
+  const todayIso = zonedTodayIsoForClover();
+  const prevNavDisabled =
+    disabled || weekOffset <= monthBounds.min;
+  const nextNavDisabled =
+    disabled ||
+    weekOffset >= monthBounds.max ||
+    (weekOffset < monthBounds.max &&
+      weekStartIsoForMonthOffset(yearMonth, weekOffset + 1) > todayIso);
 
   /** Avoid notifying on mount / Strict Mode re-runs — that duplicated `/api/dashboard/revenue` after SSR. */
   const prevWeekOffsetRef = useRef<number | null>(null);
@@ -94,8 +121,15 @@ export function WeekRangeNav({
     }
   }, [weekOffset]);
 
-  const goPrev = () => setWeekOffset((o) => o - 1);
-  const goNext = () => setWeekOffset((o) => o + 1);
+  const goPrev = () =>
+    setWeekOffset((o) => Math.max(monthBounds.min, o - 1));
+  const goNext = () =>
+    setWeekOffset((o) => {
+      const next = o + 1;
+      if (next > monthBounds.max) return o;
+      if (weekStartIsoForMonthOffset(yearMonth, next) > todayIso) return o;
+      return next;
+    });
 
   return (
     <div className={cn('flex shrink-0 items-center gap-2 sm:pl-0', className)}>
@@ -104,7 +138,7 @@ export function WeekRangeNav({
         variant="outline"
         size="icon-xs"
         className="h-7 w-7"
-        disabled={disabled}
+        disabled={prevNavDisabled}
         onClick={(e) => {
           e.preventDefault();
           goPrev();
@@ -121,7 +155,7 @@ export function WeekRangeNav({
         variant="outline"
         size="icon-xs"
         className="h-7 w-7"
-        disabled={disabled}
+        disabled={nextNavDisabled}
         onClick={(e) => {
           e.preventDefault();
           goNext();

@@ -13,18 +13,31 @@ import {
   getLaborDashboardData,
   getLaborTargetByLocationAndMonth,
 } from '@/features/dashboard/labor';
+import AnnualRevenueCard from '@/features/dashboard/revenue/components/card/AnnualRevenueCard';
 import MonthlyRevenueCard from '@/features/dashboard/revenue/components/card/MonthlyRevenueCard';
 import WeeklyRevenueCard from '@/features/dashboard/revenue/components/card/WeeklyRevenueCard';
 import {
+  ensureRevenueTargetForMonth,
+  getAnnualRevenuePeriodData,
   getCloverWeeklyRevenueData,
   getRevenuePeriodData,
 } from '@/features/dashboard/revenue';
-import { getWeekOffsetContainingToday } from '@/features/dashboard/revenue/utils/week-range';
+import { mergeDailyRevenueTargetsIntoWeeklyData } from '@/features/dashboard/revenue/utils/merge-daily-revenue-targets';
+import {
+  getRevenueTargetSnapshot,
+  getRevenueMonthTargetRefMonths,
+} from '@/features/dashboard/revenue/utils/revenue-target-snapshot';
+import {
+  clampWeekOffsetForDashboard,
+  getWeekOffsetContainingToday,
+} from '@/features/dashboard/revenue/utils/week-range';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { prisma } from '@/lib/core';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 
 const LocationPage = async ({
   params,
@@ -89,20 +102,26 @@ const LocationPage = async ({
   }
 
   if (budget) {
-    const [withCos] = await attachCurrentMonthCosToBudgets(
+    // Start both COS fetches in parallel — they cover different date ranges and are independent.
+    const currentCosPromise = attachCurrentMonthCosToBudgets(
       [budget],
       yearMonth,
       context,
     );
+    const refCosPromise = session?.user?.id
+      ? attachReferenceCosToBudgets(
+          [budget],
+          yearMonth,
+          session.user.id,
+          context,
+        )
+      : null;
+
+    const [withCos] = await currentCosPromise;
     budget = withCos;
-    if (session?.user?.id) {
-      const [withRef] = await attachReferenceCosToBudgets(
-        [budget],
-        yearMonth,
-        session.user.id,
-        context,
-      );
-      budget = withRef;
+    if (refCosPromise) {
+      const [withRef] = await refCosPromise;
+      budget = { ...budget, ...withRef };
     }
   }
 
@@ -120,24 +139,66 @@ const LocationPage = async ({
     );
   }
 
-  const initialWeekOffset = getWeekOffsetContainingToday(yearMonth);
-  const laborTargetRow = await getLaborTargetByLocationAndMonth(id, yearMonth);
-  const [monthlyRevenue, weeklyRevenue, laborData] = await Promise.all([
-    getRevenuePeriodData(id, yearMonth, context, {
-      period: 'monthly',
-      weekOffset: 0,
-    }),
-    getCloverWeeklyRevenueData(id, yearMonth, initialWeekOffset),
-    getLaborDashboardData(id, yearMonth, context, {
-      referenceIncomeTotal: budget.referenceIncomeTotal,
-      laborTarget: laborTargetRow,
-    }),
+  const initialWeekOffset = clampWeekOffsetForDashboard(
+    yearMonth,
+    getWeekOffsetContainingToday(yearMonth),
+  );
+
+  // Parallel: three fast DB lookups that are independent of each other.
+  const [laborTargetRow, revenueSnapshot, savedRefMonths] = await Promise.all([
+    getLaborTargetByLocationAndMonth(id, yearMonth),
+    getRevenueTargetSnapshot(id, yearMonth),
+    getRevenueMonthTargetRefMonths(id, yearMonth),
   ]);
+
+  // Non-blocking: recompute Clover mix if no row exists for this month.
+  // `void` is safe in a long-lived Node.js process (dev + traditional servers).
+  // For serverless deployments, wire up a cron/webhook to call this separately.
+  void ensureRevenueTargetForMonth({ locationId: id, yearMonth });
+
+  // Parallel: four main data fetches. QB P&L calls are deduplicated by React.cache().
+  const [monthlyRevenueBase, annualRevenueBase, weeklyRevenueRaw, laborData] =
+    await Promise.all([
+      getRevenuePeriodData(id, yearMonth, context, {
+        period: 'monthly',
+        weekOffset: 0,
+      }),
+      getAnnualRevenuePeriodData(id, yearMonth, context),
+      getCloverWeeklyRevenueData(id, yearMonth, initialWeekOffset),
+      getLaborDashboardData(id, yearMonth, context, {
+        referenceIncomeTotal: budget.referenceIncomeTotal,
+        laborTarget: laborTargetRow,
+      }),
+    ]);
+
+  const monthlyRevenue = {
+    ...monthlyRevenueBase,
+    monthlyRevenueTarget: revenueSnapshot?.monthlyTarget,
+  };
+  const weeklyRevenue = mergeDailyRevenueTargetsIntoWeeklyData(
+    weeklyRevenueRaw,
+    revenueSnapshot?.dailyTargetsByDate,
+  );
 
   return (
     <div className="grid gap-4 max-lg:grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:items-start">
       <div className="flex min-w-0 flex-col gap-4 lg:min-h-0">
-        <MonthlyRevenueCard data={monthlyRevenue} />
+        <div className="flex gap-4 [&>*]:flex-1">
+          <AnnualRevenueCard
+            data={annualRevenueBase}
+            annualGoal={revenueSnapshot?.annualGoal}
+            locationId={id}
+            appliesYearMonth={yearMonth}
+            showUpdateTarget={isOfficeOrAdmin}
+          />
+          <MonthlyRevenueCard
+            data={monthlyRevenue}
+            locationId={id}
+            appliesYearMonth={yearMonth}
+            showUpdateTarget={isOfficeOrAdmin}
+            savedRefMonths={savedRefMonths}
+          />
+        </div>
         <WeeklyRevenueCard
           key={yearMonth}
           locationId={id}

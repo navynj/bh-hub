@@ -15,6 +15,8 @@ export type RevenueDailyBarRow = {
   segments: Record<string, number>;
   /** Sum of segment amounts for footer display */
   total: number;
+  /** Clover revenue target for this calendar day (dollars), when configured. */
+  dailyTarget?: number;
 };
 
 export type CloverMenuItemStat = {
@@ -37,6 +39,8 @@ export type CloverDayHourlyStat = {
 export type RevenuePeriodData = {
   totalRevenue: number;
   categories: RevenueCategoryItem[];
+  /** Sum of daily revenue targets for the selected month (QuickBooks month view). */
+  monthlyRevenueTarget?: number;
   /** Weekly only: ordered keys for `dailyBars[].segments` (top-level P&L Income account ids). */
   dailyBarSegmentKeys?: string[];
   /** Same order as `dailyBarSegmentKeys`; Income account labels for legend/tooltip. */
@@ -53,6 +57,10 @@ export type RevenuePeriodData = {
   avgTicketSize?: number;
   /** Previous week's total revenue for WoW comparison */
   prevWeekRevenue?: number;
+  /**
+   * When the viewed week includes “today”, WoW uses the same weekdays only; short label for the UI.
+   */
+  wowCompareWeekdaySpanLabel?: string;
   /** Top 10 items by revenue */
   topMenuItems?: CloverMenuItemStat[];
   /** Bottom 10 items by revenue (among items actually sold) */

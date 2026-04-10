@@ -13,7 +13,17 @@ import {
 } from '@/components/ui/chart';
 import { ClassName } from '@/types/className';
 import { CHART_COLORS } from '@/constants/color';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+
+/** Single row in stacked-bar tooltip payload (Recharts + optional extra rows). */
+export type ChartBarStackedTooltipItem = {
+  value?: unknown;
+  name?: string;
+  dataKey?: string | number;
+  color?: string;
+  payload?: unknown;
+  type?: string;
+};
 
 interface ChartBarStackedProps extends ClassName {
   chartData: any[];
@@ -47,6 +57,18 @@ interface ChartBarStackedProps extends ClassName {
   tooltipExtraRows?: (
     payload: Record<string, unknown>,
   ) => Array<{ dataKey: string; name: string; value: number; color?: string }>;
+  /**
+   * Bar stack draw order (first = base / left for horizontal stacks, bottom for vertical).
+   * When omitted, uses `Object.entries(chartConfig)` order (not always stable for Remaining/Over).
+   */
+  stackKeyOrder?: string[];
+  /** Reorder tooltip rows after filters/extra rows (e.g. Sales 01…n, then others, then remaining). */
+  sortTooltipPayload?: (
+    payload: ChartBarStackedTooltipItem[],
+    chartConfig: ChartConfig,
+  ) => ChartBarStackedTooltipItem[];
+  /** Per-bar X-axis tick index → extra classes (e.g. `fill-destructive` for holidays). */
+  xAxisTickClassNameByIndex?: (index: number) => string | undefined;
 }
 
 export function ChartBarStacked({
@@ -61,8 +83,19 @@ export function ChartBarStacked({
   tooltipAlwaysShowKeys = [],
   tooltipNameGetter,
   tooltipExtraRows,
+  stackKeyOrder,
+  sortTooltipPayload,
+  xAxisTickClassNameByIndex,
   className,
 }: ChartBarStackedProps) {
+  const orderedEntries = (() => {
+    if (stackKeyOrder?.length) {
+      return stackKeyOrder
+        .filter((k) => Object.prototype.hasOwnProperty.call(chartConfig, k))
+        .map((k) => [k, chartConfig[k]!] as const);
+    }
+    return Object.entries(chartConfig);
+  })();
   const renderTooltip = (props: {
     active?: boolean;
     payload?: Array<{
@@ -117,6 +150,9 @@ export function ChartBarStacked({
         })),
       ];
     }
+    if (sortTooltipPayload) {
+      payload = sortTooltipPayload(payload, chartConfig);
+    }
     const formatter =
       filterTooltipZero || tooltipValueGetter
         ? (
@@ -134,8 +170,13 @@ export function ChartBarStacked({
                 ? (item.payload as Record<string, unknown>)
                 : {};
             const dataKey = String(item.dataKey ?? item.name ?? '');
+            const configLabel = chartConfig[dataKey]?.label;
+            const labelFromConfig =
+              typeof configLabel === 'string' ? configLabel : undefined;
             const displayName =
-              tooltipNameGetter?.(payloadObj, dataKey) ?? String(name ?? '');
+              tooltipNameGetter?.(payloadObj, dataKey) ??
+              labelFromConfig ??
+              String(name ?? '');
             const displayValue = tooltipValueGetter
               ? tooltipValueGetter(payloadObj, dataKey)
               : value;
@@ -188,8 +229,50 @@ export function ChartBarStacked({
           tickLine={false}
           tickMargin={10}
           axisLine={false}
-          tickFormatter={(value) =>
-            typeof value === 'string' ? value.slice(0, 8) : String(value ?? '')
+          tickFormatter={
+            xAxisTickClassNameByIndex
+              ? undefined
+              : (value) =>
+                  typeof value === 'string'
+                    ? value.slice(0, 8)
+                    : String(value ?? '')
+          }
+          tick={
+            xAxisTickClassNameByIndex
+              ? (props: {
+                  x?: string | number;
+                  y?: string | number;
+                  payload?: { value?: unknown };
+                  index?: number;
+                }) => {
+                  const x = Number(props.x ?? 0);
+                  const y = Number(props.y ?? 0);
+                  const raw = props.payload?.value;
+                  const text =
+                    typeof raw === 'string'
+                      ? raw.slice(0, 8)
+                      : String(raw ?? '');
+                  const tickExtra = xAxisTickClassNameByIndex(
+                    props.index ?? 0,
+                  );
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      <text
+                        x={0}
+                        y={0}
+                        dy={16}
+                        textAnchor="middle"
+                        className={cn(
+                          'text-xs',
+                          tickExtra ?? 'fill-muted-foreground',
+                        )}
+                      >
+                        {text}
+                      </text>
+                    </g>
+                  );
+                }
+              : undefined
           }
         />
         <ChartTooltip
@@ -217,7 +300,7 @@ export function ChartBarStacked({
           )}
         />
         <BarStack radius={[8, 8, 0, 0]}>
-          {Object.entries(chartConfig).map(([dataKey, config], i, arr) => {
+          {orderedEntries.map(([dataKey, config], i, arr) => {
             const isLast = i === arr.length - 1;
             return (
               <Bar

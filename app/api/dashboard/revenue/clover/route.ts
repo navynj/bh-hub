@@ -1,7 +1,13 @@
 // GET /api/dashboard/revenue/clover?locationId=&yearMonth=YYYY-MM&weekOffset=0
 
+import { mergeDailyRevenueTargetsIntoWeeklyData } from '@/features/dashboard/revenue/utils/merge-daily-revenue-targets';
 import { getCloverWeeklyRevenueData } from '@/features/dashboard/revenue/utils/get-clover-weekly-revenue';
-import { weekRangeForMonth } from '@/features/dashboard/revenue/utils/week-range';
+import { getRevenueTargetSnapshot } from '@/features/dashboard/revenue/utils/revenue-target-snapshot';
+import {
+  getWeekOffsetsIntersectingMonth,
+  isWeekStartOnOrBeforeToday,
+  weekRangeForMonth,
+} from '@/features/dashboard/revenue/utils/week-range';
 import { auth, getOfficeOrAdmin } from '@/lib/auth';
 import { toApiErrorResponse } from '@/lib/core/errors';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
@@ -56,10 +62,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = await getCloverWeeklyRevenueData(
+    const { min: minWeek, max: maxWeek } =
+      getWeekOffsetsIntersectingMonth(yearMonth);
+    if (weekOffset < minWeek || weekOffset > maxWeek) {
+      return NextResponse.json(
+        {
+          error: `weekOffset must be between ${minWeek} and ${maxWeek} for ${yearMonth}`,
+        },
+        { status: 400 },
+      );
+    }
+    if (!isWeekStartOnOrBeforeToday(yearMonth, weekOffset)) {
+      return NextResponse.json(
+        { error: 'Cannot load a week that has not started yet' },
+        { status: 400 },
+      );
+    }
+
+    const snapshot = await getRevenueTargetSnapshot(locationId, yearMonth);
+    const raw = await getCloverWeeklyRevenueData(
       locationId,
       yearMonth,
       weekOffset,
+    );
+    const data = mergeDailyRevenueTargetsIntoWeeklyData(
+      raw,
+      snapshot?.dailyTargetsByDate,
     );
 
     const range = weekRangeForMonth(yearMonth, weekOffset);

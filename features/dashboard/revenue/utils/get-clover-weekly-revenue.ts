@@ -5,6 +5,7 @@ import {
 } from '@/lib/clover/fetch-categories';
 import { fetchCloverOrderItemsInRange } from '@/lib/clover/fetch-orders';
 import { fetchCloverPaymentsInRange } from '@/lib/clover/fetch-payments';
+import { cloverPaymentNetSalesCents } from '@/lib/clover/payment-net-sales';
 import {
   getCloverReportTimeZone,
   zonedCalendarDay,
@@ -12,7 +13,7 @@ import {
   zonedWeekdayShort,
 } from '@/lib/clover/report-timezone';
 import { prisma } from '@/lib/core/prisma';
-import { eachDayOfInterval } from 'date-fns';
+import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns';
 import type {
   CloverDayHourlyStat,
   CloverMenuItemStat,
@@ -30,7 +31,9 @@ function weekRowsForInterval(
 ): { date: string; label: string }[] {
   const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
   return days.map((day) => {
-    const ms = day.getTime();
+    // Use noon UTC (+12h) instead of midnight UTC so that zonedCalendarDay returns
+    // the correct Vancouver calendar day. UTC midnight = previous day in PDT (UTC-7).
+    const ms = day.getTime() + 12 * 3600_000;
     return {
       date: zonedCalendarDay(ms, timeZone),
       label: zonedWeekdayShort(ms, timeZone),
@@ -71,7 +74,12 @@ function buildMenuStats(
 } {
   const statsMap = new Map<
     string,
-    { itemId: string | null; name: string; quantity: number; revenueCents: number }
+    {
+      itemId: string | null;
+      name: string;
+      quantity: number;
+      revenueCents: number;
+    }
   >();
 
   for (const li of lineItems) {
@@ -129,7 +137,10 @@ function buildDayHourlySales(
   const dayKeys = new Set(rows.map((r) => r.date));
 
   // { date → { hour → { revenue, count } } }
-  const map = new Map<string, Map<number, { revenue: number; count: number }>>();
+  const map = new Map<
+    string,
+    Map<number, { revenue: number; count: number }>
+  >();
   for (const r of rows) {
     map.set(r.date, new Map());
   }
@@ -142,7 +153,7 @@ function buildDayHourlySales(
     const dayMap = map.get(dk)!;
     const existing = dayMap.get(hour) ?? { revenue: 0, count: 0 };
     dayMap.set(hour, {
-      revenue: existing.revenue + (p.amount ?? 0) / 100,
+      revenue: existing.revenue + cloverPaymentNetSalesCents(p) / 100,
       count: existing.count + 1,
     });
   }
@@ -150,14 +161,20 @@ function buildDayHourlySales(
   const result: CloverDayHourlyStat[] = [];
   for (const [date, hourMap] of map) {
     for (const [hour, stats] of hourMap) {
-      result.push({ date, hour, revenue: stats.revenue, transactionCount: stats.count });
+      result.push({
+        date,
+        hour,
+        revenue: stats.revenue,
+        transactionCount: stats.count,
+      });
     }
   }
   return result;
 }
 
 /**
- * Weekly Clover sales from the Clover Payments + Orders APIs (not QuickBooks P&L).
+ * Weekly Clover **net sales** from Payments + Orders APIs (not QuickBooks P&L).
+ * Per payment: `amount − taxAmount − tipAmount` (Clover fields, cents), same as export script.
  */
 export async function getCloverWeeklyRevenueData(
   locationId: string,
@@ -189,12 +206,14 @@ export async function getCloverWeeklyRevenueData(
   }
 
   const startMs = weekStart.getTime();
-  const endMs = weekEnd.getTime();
+  // Extend end by 24h to cover the full last day in Vancouver time (UTC-7/8 = up to
+  // 8h of Sunday can fall past UTC midnight of Saturday). dayKeys filter excludes extras.
+  const endMs = weekEnd.getTime() + 24 * 3600_000;
 
   // Previous week range for WoW comparison
   const prevRange = weekRangeForMonth(yearMonth, weekOffset - 1);
   const prevStartMs = prevRange.weekStart.getTime();
-  const prevEndMs = prevRange.weekEnd.getTime();
+  const prevEndMs = prevRange.weekEnd.getTime() + 24 * 3600_000;
 
   // Sequential Clover calls — parallel bursts were triggering 429 Too Many Requests.
   let payments: Awaited<ReturnType<typeof fetchCloverPaymentsInRange>>;
@@ -203,14 +222,24 @@ export async function getCloverWeeklyRevenueData(
   let categories: Awaited<ReturnType<typeof fetchCloverCategories>>;
 
   try {
-    payments = await fetchCloverPaymentsInRange(merchantId, token, startMs, endMs);
+    payments = await fetchCloverPaymentsInRange(
+      merchantId,
+      token,
+      startMs,
+      endMs,
+    );
     prevPayments = await fetchCloverPaymentsInRange(
       merchantId,
       token,
       prevStartMs,
       prevEndMs,
     );
-    orderItems = await fetchCloverOrderItemsInRange(merchantId, token, startMs, endMs);
+    orderItems = await fetchCloverOrderItemsInRange(
+      merchantId,
+      token,
+      startMs,
+      endMs,
+    );
     categories = await fetchCloverCategories(merchantId, token);
   } catch (err) {
     return emptyWeekBars(weekStart, weekEnd, {
@@ -223,7 +252,11 @@ export async function getCloverWeeklyRevenueData(
   const seasonalCategory = findSeasonalCategory(categories);
   if (seasonalCategory) {
     try {
-      const ids = await fetchCloverItemIdsByCategory(merchantId, token, seasonalCategory.id);
+      const ids = await fetchCloverItemIdsByCategory(
+        merchantId,
+        token,
+        seasonalCategory.id,
+      );
       seasonalItemIds = new Set(ids);
     } catch {
       // Non-fatal: seasonal section just won't appear
@@ -234,80 +267,81 @@ export async function getCloverWeeklyRevenueData(
     return emptyWeekBars(weekStart, weekEnd);
   }
 
-  // ── Tender-based daily bars (existing logic) ──────────────────────────────
-  const idToLabel = new Map<string, string>();
-  for (const p of payments) {
-    const tid = p.tender?.id ?? 'unknown';
-    const lab = p.tender?.label?.trim() || tid;
-    if (!idToLabel.has(tid)) idToLabel.set(tid, lab);
-  }
-
-  const segmentKeys = [...idToLabel.keys()].sort((a, b) =>
-    (idToLabel.get(a) ?? a).localeCompare(idToLabel.get(b) ?? b),
-  );
-  const segmentLabels = segmentKeys.map((k) => idToLabel.get(k) ?? k);
-
   const tz = getCloverReportTimeZone();
   const weekRows = weekRowsForInterval(weekStart, weekEnd, tz);
   const dayKeys = new Set(weekRows.map((r) => r.date));
 
   const dayTotalsCents = new Map<string, number>();
-  const amountByTenderCents = new Map<string, number>();
-  const amountByDayAndTender = new Map<string, Map<string, number>>();
-
   for (const p of payments) {
-    const tenderId = p.tender?.id ?? 'unknown';
-    const cents = p.amount ?? 0;
-
-    amountByTenderCents.set(
-      tenderId,
-      (amountByTenderCents.get(tenderId) ?? 0) + cents,
-    );
-
     if (p.createdTime == null) continue;
     const dk = zonedCalendarDay(p.createdTime, tz);
     if (!dayKeys.has(dk)) continue;
-
+    const cents = cloverPaymentNetSalesCents(p);
     dayTotalsCents.set(dk, (dayTotalsCents.get(dk) ?? 0) + cents);
-
-    let m = amountByDayAndTender.get(dk);
-    if (!m) {
-      m = new Map();
-      amountByDayAndTender.set(dk, m);
-    }
-    m.set(tenderId, (m.get(tenderId) ?? 0) + cents);
   }
 
-  const weekTotalCents = payments.reduce((s, p) => s + (p.amount ?? 0), 0);
+  const todayIso = zonedCalendarDay(Date.now(), tz);
+  const inProgressWeek = weekRows.some((r) => r.date === todayIso);
+  const wowCompareDayKeys = new Set(
+    inProgressWeek
+      ? weekRows.filter((r) => r.date <= todayIso).map((r) => r.date)
+      : weekRows.map((r) => r.date),
+  );
+  const prevWowCompareDayKeys = new Set(
+    [...wowCompareDayKeys].map((d) =>
+      format(subDays(parseISO(d), 7), 'yyyy-MM-dd'),
+    ),
+  );
+
+  function sumPaymentCentsInDays(
+    list: typeof payments,
+    allowedDays: Set<string>,
+  ): number {
+    let s = 0;
+    for (const p of list) {
+      if (p.createdTime == null) continue;
+      const dk = zonedCalendarDay(p.createdTime, tz);
+      if (!allowedDays.has(dk)) continue;
+      s += cloverPaymentNetSalesCents(p);
+    }
+    return s;
+  }
+
+  const weekTotalCents = sumPaymentCentsInDays(payments, wowCompareDayKeys);
   const weekTotalRevenue = weekTotalCents / 100;
   const prevWeekRevenue =
-    prevPayments.reduce((s, p) => s + (p.amount ?? 0), 0) / 100;
+    sumPaymentCentsInDays(prevPayments, prevWowCompareDayKeys) / 100;
 
-  const categories_tender = segmentKeys.map((id) => ({
-    id,
-    name: idToLabel.get(id) ?? id,
-    amount: (amountByTenderCents.get(id) ?? 0) / 100,
-  }));
+  const spanRows = weekRows.filter((r) => wowCompareDayKeys.has(r.date));
+  const wowCompareWeekdaySpanLabel =
+    inProgressWeek && spanRows.length > 0 && spanRows.length < weekRows.length
+      ? `${spanRows[0]!.label}–${spanRows[spanRows.length - 1]!.label} · Compare with same weekdays last week`
+      : undefined;
 
   const dailyBars = weekRows.map(({ date: key, label }) => {
-    const perTender = amountByDayAndTender.get(key) ?? new Map();
-    const segments: Record<string, number> = Object.fromEntries(
-      segmentKeys.map((id) => [id, (perTender.get(id) ?? 0) / 100]),
-    );
+    const dayDollars = (dayTotalsCents.get(key) ?? 0) / 100;
     return {
       label,
       date: key,
-      segments,
-      total: (dayTotalsCents.get(key) ?? 0) / 100,
+      segments: { [EMPTY_SEGMENT_KEY]: dayDollars },
+      total: dayDollars,
     };
   });
 
-  // ── Enhanced stats ────────────────────────────────────────────────────────
-  const transactionCount = payments.length;
-  const avgTicketSize = transactionCount > 0 ? weekTotalRevenue / transactionCount : 0;
+  // ── Enhanced stats (aligned with WoW window: full week or Sun–today) ───────
+  const transactionCount = payments.filter((p) => {
+    if (p.createdTime == null) return false;
+    return wowCompareDayKeys.has(zonedCalendarDay(p.createdTime, tz));
+  }).length;
+  const avgTicketSize =
+    transactionCount > 0 ? weekTotalRevenue / transactionCount : 0;
+
+  const orderItemsInWowWindow = orderItems.filter((li) =>
+    wowCompareDayKeys.has(zonedCalendarDay(li.orderedAtMs, tz)),
+  );
 
   const { topMenuItems, bottomMenuItems, seasonalMenuItems } = buildMenuStats(
-    orderItems,
+    orderItemsInWowWindow,
     weekTotalRevenue,
     seasonalItemIds,
   );
@@ -316,16 +350,24 @@ export async function getCloverWeeklyRevenueData(
 
   return {
     totalRevenue: weekTotalRevenue,
-    categories: categories_tender,
+    categories: [
+      {
+        id: EMPTY_SEGMENT_KEY,
+        name: EMPTY_SEGMENT_LABEL,
+        amount: weekTotalRevenue,
+      },
+    ],
     dailyBars,
-    dailyBarSegmentKeys: segmentKeys,
-    dailyBarSegmentLabels: segmentLabels,
+    dailyBarSegmentKeys: [EMPTY_SEGMENT_KEY],
+    dailyBarSegmentLabels: [EMPTY_SEGMENT_LABEL],
     transactionCount,
     avgTicketSize,
     prevWeekRevenue,
+    wowCompareWeekdaySpanLabel,
     topMenuItems,
     bottomMenuItems,
-    seasonalMenuItems: seasonalMenuItems.length > 0 ? seasonalMenuItems : undefined,
+    seasonalMenuItems:
+      seasonalMenuItems.length > 0 ? seasonalMenuItems : undefined,
     dayHourlySales,
   };
 }

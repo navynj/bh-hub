@@ -4,6 +4,10 @@ import { getCloverApiBaseUrl } from './config';
 type CloverApiPayment = {
   id?: string;
   amount?: number;
+  /** Cents; subtract from `amount` for net sales (with `tipAmount`). */
+  taxAmount?: number;
+  /** Cents; subtract from `amount` for net sales (with `taxAmount`). */
+  tipAmount?: number;
   createdTime?: number;
   result?: string;
   tender?: {

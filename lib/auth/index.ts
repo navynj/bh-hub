@@ -84,7 +84,14 @@ export function requireActiveSession(
 }
 
 export function getOfficeOrAdmin(role: string | null | undefined): boolean {
-  return role === 'admin' || role === 'office';
+  const r =
+    typeof role === 'string' ? role.toLowerCase() : String(role ?? '').toLowerCase();
+  return r === 'admin' || r === 'office';
+}
+
+/** Location manager (store); not authorized to edit org-wide revenue targets. */
+export function getIsManager(role: string | null | undefined): boolean {
+  return role === 'manager';
 }
 
 /** Can see Delivery and Cost in nav (admin, office, assistant). */
