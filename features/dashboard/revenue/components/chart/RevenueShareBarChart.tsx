@@ -225,7 +225,12 @@ export default function RevenueShareBarChart({
             />
           }
         />
-        <BarStack stackId="revenue" radius={6}>
+        {/* key forces BarStack to remount when the segment set changes — this re-registers all
+            Bar children in JSX order in recharts's internal Redux store, guaranteeing that
+            REMAINING_KEY (or OVER_KEY) ends up last in the d3-stack order. Without this, React
+            reconciliation can leave revenueRemaining at an earlier position when new segments
+            are added after it was already registered. */}
+        <BarStack key={stackKeys.join(',')} stackId="revenue" radius={6}>
           {stackKeys.map((key) => (
             <Bar
               key={key}
