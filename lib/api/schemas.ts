@@ -17,8 +17,8 @@ export const onboardingPostSchema = z
       .string()
       .min(1, 'Name is required')
       .transform((s) => s.trim()),
-    role: z.enum(['admin', 'office', 'manager', 'assistant'], {
-      message: 'Valid role is required (admin, office, manager, assistant)',
+    role: z.enum(['office', 'manager', 'assistant'], {
+      message: 'Valid role is required (office, manager, assistant)',
     }),
     locationId: z.string().min(1).optional(),
   })
@@ -353,6 +353,153 @@ export const deliveryDriverLocationPostSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
 });
+
+// ─── Supplier ─────────────────────────────────────────────────────────────────
+
+export const supplierCreateSchema = z.object({
+  company: z
+    .string()
+    .min(1, 'Company name is required')
+    .transform((s) => s.trim()),
+  shopifyVendorName: z.string().trim().optional().nullable(),
+  contactName: z.string().trim().optional().nullable(),
+  contactEmail: z.string().email().trim().optional().nullable(),
+  contactPhone: z.string().trim().optional().nullable(),
+  preferredCommMode: z.enum(['email', 'chat', 'sms']).optional().nullable(),
+  groupId: z.string().optional().nullable(),
+  link: z.string().url().trim().optional().nullable(),
+  notes: z.string().trim().optional().nullable(),
+  /** Vendor name aliases for ShopifyVendorMapping (handles vendor renames). */
+  vendorAliases: z.array(z.string().trim().min(1)).optional(),
+});
+
+export const supplierUpdateSchema = supplierCreateSchema.partial();
+
+// ─── Office: Shopify order edit (Inbox / PO) ─────────────────────────────────
+
+export const shopifyOrderEditOperationSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('setQuantity'),
+    shopifyLineItemGid: z.string().min(1),
+    quantity: z.number().int().min(0),
+    restock: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal('setUnitPrice'),
+    shopifyLineItemGid: z.string().min(1),
+    unitPrice: z.number().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('addVariant'),
+    variantGid: z.string().min(1),
+    quantity: z.number().int().min(1),
+    allowDuplicates: z.boolean().optional(),
+    unitPriceOverride: z.number().nonnegative().optional(),
+  }),
+  z.object({
+    type: z.literal('addCustomItem'),
+    title: z.string().min(1),
+    unitPrice: z.number().nonnegative(),
+    quantity: z.number().int().min(1),
+    taxable: z.boolean().optional(),
+    requiresShipping: z.boolean().optional(),
+  }),
+]);
+
+export const shopifyOrderApplyEditBodySchema = z.object({
+  operations: z.array(shopifyOrderEditOperationSchema).min(1),
+  variantCatalogUpdates: z
+    .array(
+      z.object({
+        productGid: z.string().min(1),
+        variantGid: z.string().min(1),
+        price: z.string().min(1),
+      }),
+    )
+    .optional(),
+  purchaseOrderId: z.string().min(1).optional(),
+  appendLinesFromShopifyOrderLocalId: z.string().min(1).optional(),
+});
+
+export type ShopifyOrderApplyEditBody = z.infer<typeof shopifyOrderApplyEditBodySchema>;
+export type ShopifyOrderEditOperation = z.infer<typeof shopifyOrderEditOperationSchema>;
+
+// ─── Address ─────────────────────────────────────────────────────────────────
+
+export const addressSchema = z.object({
+  address1: z.string().trim().min(1, 'Address line 1 is required'),
+  address2: z.string().trim().optional().default(''),
+  city: z.string().trim().min(1, 'City is required'),
+  province: z.string().trim().min(1, 'Province is required'),
+  postalCode: z.string().trim().min(1, 'Postal code is required'),
+  country: z.string().trim().default('CA'),
+});
+
+export type Address = z.infer<typeof addressSchema>;
+
+// ─── Purchase Order ──────────────────────────────────────────────────────────
+
+const purchaseOrderLineItemSchema = z.object({
+  sku: z.string().trim().optional().nullable(),
+  variantTitle: z.string().trim().optional().nullable(),
+  productTitle: z.string().trim().optional().nullable(),
+  quantity: z.number().int().min(1),
+  itemPrice: z.number().optional().nullable(),
+  supplierRef: z.string().trim().optional().nullable(),
+  isCustom: z.boolean().optional().default(false),
+  shopifyVariantGid: z.string().trim().optional().nullable(),
+  shopifyProductGid: z.string().trim().optional().nullable(),
+});
+
+const shopifyOrderRefSchema = z.object({
+  orderNumber: z.string().min(1),
+});
+
+export const purchaseOrderCreateSchema = z.object({
+  poNumber: z.string().min(1, 'PO number is required').transform((s) => s.trim()),
+  supplierId: z.string().optional().nullable(),
+  currency: z.string().min(1).default('CAD'),
+  isAuto: z.boolean().optional().default(false),
+  expectedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional().nullable(),
+  comment: z.string().trim().optional().nullable(),
+  lineItems: z.array(purchaseOrderLineItemSchema).optional().default([]),
+  shopifyOrderRefs: z.array(shopifyOrderRefSchema).optional().default([]),
+  shippingAddress: addressSchema.optional().nullable(),
+  billingAddress: addressSchema.optional().nullable(),
+  billingSameAsShipping: z.boolean().optional().default(true),
+});
+
+export const purchaseOrderUpdateSchema = z.object({
+  poNumber: z.string().min(1).transform((s) => s.trim()).optional(),
+  supplierId: z.string().optional().nullable(),
+  currency: z.string().min(1).optional(),
+  expectedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional().nullable(),
+  comment: z.string().trim().optional().nullable(),
+  completedAt: z.string().datetime().optional().nullable(),
+  shippingAddress: addressSchema.optional().nullable(),
+  billingAddress: addressSchema.optional().nullable(),
+  billingSameAsShipping: z.boolean().optional(),
+});
+
+export type PurchaseOrderCreateBody = z.infer<typeof purchaseOrderCreateSchema>;
+export type PurchaseOrderUpdateBody = z.infer<typeof purchaseOrderUpdateSchema>;
+
+// ─── Receive (fulfill) line items ─────────────────────────────────────────────
+
+export const receiveLineItemsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        quantityReceived: z.number().int().min(0),
+      }),
+    )
+    .min(1),
+});
+
+export type ReceiveLineItemsBody = z.infer<typeof receiveLineItemsSchema>;
+
+// ─── parseBody ────────────────────────────────────────────────────────────────
 
 /**
  * Parse and validate JSON body. Returns either { data } or { error: NextResponse }.

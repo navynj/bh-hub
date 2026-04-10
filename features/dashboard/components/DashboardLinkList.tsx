@@ -12,7 +12,8 @@ const DashboardLinkList = () => {
   const linkClass = (path: string) =>
     pathname === path || pathname.startsWith(path + '/') ? '' : 'text-gray-300';
   const costPathActive =
-    pathname === '/dashboard/cost' || pathname.startsWith('/dashboard/cost/');
+    pathname === '/dashboard' ||
+    pathname.startsWith('/dashboard/location/');
   return (
     <>
       {/* <Link
@@ -22,7 +23,7 @@ const DashboardLinkList = () => {
         Revenue
       </Link> */}
       <Link
-        href={`/dashboard/cost${queryString}`}
+        href={`/dashboard${queryString}`}
         className={costPathActive ? '' : 'text-gray-300'}
       >
         Cost

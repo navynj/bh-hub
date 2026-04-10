@@ -65,22 +65,22 @@ model Realm {
 }
 
 model Location {
-  id               String        @id @default(cuid())
-  code             String        @unique
-  name             String
-  createdAt        DateTime      @default(now()) @map("created_at")
-  classId          String?       @map("class_id")
-  realmId          String        @map("realm_id")
-  startYearMonth   String?       @map("start_year_month")
-  showBudget       Boolean       @default(true) @map("show_budget")
-  cloverMerchantId String?       @map("clover_merchant_id")
-  cloverToken      String?       @map("clover_token")
-  budgets          Budget[]
-  laborTargets     LaborTarget[]
+  id                  String               @id @default(cuid())
+  code                String               @unique
+  name                String
+  createdAt           DateTime             @default(now()) @map("created_at")
+  classId             String?              @map("class_id")
+  realmId             String               @map("realm_id")
+  startYearMonth      String?              @map("start_year_month")
+  showBudget          Boolean              @default(true) @map("show_budget")
+  cloverMerchantId    String?              @map("clover_merchant_id")
+  cloverToken         String?              @map("clover_token")
+  budgets             Budget[]
+  laborTargets        LaborTarget[]
   revenueAnnualGoals  RevenueAnnualGoal[]
   revenueMonthTargets RevenueMonthTarget[]
-  realm            Realm         @relation(fields: [realmId], references: [id])
-  users            User[]
+  realm               Realm                @relation(fields: [realmId], references: [id])
+  users               User[]
 
   @@map("locations")
   @@schema("public")
@@ -205,15 +205,15 @@ model RevenueAnnualGoal {
  * `refYearMonth` kept for legacy rows; new writes mirror `appliesYearMonth`.
  */
 model RevenueMonthTarget {
-  id                      String   @id @default(cuid())
-  locationId              String   @map("location_id")
-  appliesYearMonth        String   @map("applies_year_month")
-  referencePeriodMonths   Int      @default(12) @map("reference_period_months")
-  sharesJson              String   @map("shares_json") @db.Text
-  computedAt              DateTime @map("computed_at")
-  createdAt               DateTime @default(now()) @map("created_at")
-  updatedAt               DateTime @updatedAt @map("updated_at")
-  location                Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  id                    String   @id @default(cuid())
+  locationId            String   @map("location_id")
+  appliesYearMonth      String   @map("applies_year_month")
+  referencePeriodMonths Int      @default(12) @map("reference_period_months")
+  sharesJson            String   @map("shares_json") @db.Text
+  computedAt            DateTime @map("computed_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  location              Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@unique([locationId, appliesYearMonth])
   @@map("revenue_month_targets")
@@ -552,91 +552,305 @@ model DriverLocationUpdate {
 }
 
 // ===============================
-// ORDER (Purchase orders — migrated from Shopify Auto Purchase Orders export)
+// ORDER (Shopify-first order management)
 // ===============================
-model PurchaseOrder {
-  id                    String                      @id @default(cuid())
-  /// Shopify app PO id from export `ID` column (stable key for idempotent import).
-  legacyExternalId      Int?                        @unique @map("legacy_external_id")
-  poNumber              String                      @map("po_number")
-  status                String
-  currency              String
-  isAuto                Boolean                     @default(false) @map("is_auto")
-  displayTaxColumn      Boolean                     @default(false) @map("display_tax_column")
-  comment               String?                     @db.Text
-  authorizedBy          String?                     @map("authorized_by")
-  unitsOrdered          Int?                        @map("units_ordered")
-  dateCreated           DateTime?                   @map("date_created") @db.Date
-  expectedDate          DateTime?                   @map("expected_date") @db.Date
-  subtotalPrice         Decimal?                    @map("subtotal_price") @db.Decimal(14, 2)
-  discount              Decimal?                    @map("discount") @db.Decimal(14, 2)
-  discountReason        String?                     @map("discount_reason") @db.Text
-  shippingHandlingPrice Decimal?                    @map("shipping_handling_price") @db.Decimal(14, 2)
-  totalTaxPrice         Decimal?                    @map("total_tax_price") @db.Decimal(14, 2)
-  totalPrice            Decimal?                    @map("total_price") @db.Decimal(14, 2)
-  sourceCreatedAt       DateTime?                   @map("source_created_at") @db.Timestamptz
-  sourceUpdatedAt       DateTime?                   @map("source_updated_at") @db.Timestamptz
-  completedAt           DateTime?                   @map("completed_at") @db.Timestamptz
-  supplierExternalId    Int?                        @map("supplier_external_id")
-  supplierCompany       String?                     @map("supplier_company")
-  supplierContactName   String?                     @map("supplier_contact_name")
-  /// One PO can combine multiple Shopify orders — contact/addresses live per linked order.
-  shopifyOrderRefs      PurchaseOrderShopifyOrder[]
-  lineItems             PurchaseOrderLineItem[]
-  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz
 
-  @@index([poNumber])
+// --- Shopify synced data (source of truth for customers, orders, fulfillment) ---
+
+model ShopifyCustomer {
+  id                    String         @id @default(cuid())
+  shopifyGid            String         @unique @map("shopify_gid")
+  displayName           String?        @map("display_name")
+  /// Local override for display name (not synced back to Shopify).
+  displayNameOverride   String?        @map("display_name_override")
+  email                 String?
+  phone                 String?
+  company               String?
+  /// Default shipping address (JSON: address1, address2, city, province, postalCode, country).
+  shippingAddress       Json?          @map("shipping_address")
+  /// Default billing address (JSON, same shape as shipping).
+  billingAddress        Json?          @map("billing_address")
+  billingSameAsShipping Boolean        @default(true) @map("billing_same_as_shipping")
+  syncedAt              DateTime       @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  orders                ShopifyOrder[]
+  fulfillments          Fulfillment[]
+
+  @@index([email])
+  @@map("shopify_customers")
+  @@schema("order")
+}
+
+model ShopifyOrder {
+  id                       String                 @id @default(cuid())
+  shopifyGid               String                 @unique @map("shopify_gid")
+  /// Display name as shown in Shopify (e.g. "#5902").
+  name                     String
+  /// Numeric portion of the order name for fast lookups.
+  orderNumber              Int                    @map("order_number")
+  customerId               String?                @map("customer_id")
+  customer                 ShopifyCustomer?       @relation(fields: [customerId], references: [id])
+  email                    String?
+  displayFulfillmentStatus String?                @map("display_fulfillment_status")
+  displayFinancialStatus   String?                @map("display_financial_status")
+  currencyCode             String?                @map("currency_code")
+  totalPrice               Decimal?               @map("total_price") @db.Decimal(14, 2)
+  processedAt              DateTime?              @map("processed_at") @db.Timestamptz
+  shopifyCreatedAt         DateTime?              @map("shopify_created_at") @db.Timestamptz
+  billingAddress           Json?                  @map("billing_address")
+  shippingAddress          Json?                  @map("shipping_address")
+  archivedAt               DateTime?              @map("archived_at") @db.Timestamptz
+  syncedAt                 DateTime               @default(now()) @map("synced_at") @db.Timestamptz
+  createdAt                DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+  lineItems                ShopifyOrderLineItem[]
+  purchaseOrders           PurchaseOrder[]
+  fulfillments             Fulfillment[]
+
+  @@index([orderNumber])
+  @@index([customerId])
+  @@index([displayFulfillmentStatus])
+  @@map("shopify_orders")
+  @@schema("order")
+}
+
+model ShopifyOrderLineItem {
+  id                     String                  @id @default(cuid())
+  shopifyGid             String                  @unique @map("shopify_gid")
+  orderId                String                  @map("order_id")
+  order                  ShopifyOrder            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  title                  String?
+  sku                    String?
+  variantTitle           String?                 @map("variant_title")
+  variantGid             String?                 @map("variant_gid")
+  /// Shopify product vendor name at order creation time (frozen snapshot).
+  vendor                 String?
+  quantity               Int                     @default(0)
+  price                  Decimal?                @db.Decimal(14, 2)
+  /// Variant inventory unit cost (Shopify), when available.
+  unitCost               Decimal?                @map("unit_cost") @db.Decimal(14, 2)
+  createdAt              DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+  purchaseOrderLineItems PurchaseOrderLineItem[]
+  fulfillmentLineItems   FulfillmentLineItem[]
+
+  @@index([orderId])
+  @@index([sku])
+  @@index([vendor])
+  @@map("shopify_order_line_items")
+  @@schema("order")
+}
+
+// --- Suppliers ---
+
+model SupplierGroup {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique
+  sortOrder Int        @default(0) @map("sort_order")
+  suppliers Supplier[]
+  createdAt DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("supplier_groups")
+  @@schema("order")
+}
+
+model Supplier {
+  id                String                 @id @default(cuid())
+  /// Shopify product vendor name (matched during import or manual link).
+  shopifyVendorName String?                @unique @map("shopify_vendor_name")
+  company           String
+  groupId           String?                @map("group_id")
+  group             SupplierGroup?         @relation(fields: [groupId], references: [id])
+  contactName       String?                @map("contact_name")
+  contactEmail      String?                @map("contact_email")
+  contactPhone      String?                @map("contact_phone")
+  /// Preferred communication channel (email, chat, sms).
+  preferredCommMode String?                @map("preferred_comm_mode")
+  isFavorite        Boolean                @default(false) @map("is_favorite")
+  /// External ordering URL (e.g. supplier's website for placing orders).
+  link              String?
+  notes             String?                @db.Text
+  purchaseOrders    PurchaseOrder[]
+  vendorMappings    ShopifyVendorMapping[]
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  orderChannelPayload Json?   @map("order_channel_payload")
+  orderChannelType    String? @map("order_channel_type")
+
+  @@index([groupId])
+  @@map("suppliers")
+  @@schema("order")
+}
+
+/// Maps Shopify vendor name strings to a Supplier. Multiple names (aliases) can
+/// point to the same Supplier, handling vendor renames gracefully.
+model ShopifyVendorMapping {
+  id         String   @id @default(cuid())
+  vendorName String   @unique @map("vendor_name")
+  supplierId String   @map("supplier_id")
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([supplierId])
+  @@map("shopify_vendor_mappings")
+  @@schema("order")
+}
+
+// --- Purchase Orders ---
+
+model PurchaseOrder {
+  id                    String                  @id @default(cuid())
+  /// Shopify app PO id from export `ID` column (stable key for idempotent import).
+  legacyExternalId      Int?                    @unique @map("legacy_external_id")
+  poNumber              String                  @unique @map("po_number")
+  /// customer = driven by Shopify orders, stock = office stocking without customer orders.
+  poType                String                  @default("customer") @map("po_type")
+  /// unfulfilled | partially_fulfilled | fulfilled | completed
+  status                String                  @default("unfulfilled")
+  currency              String
+  isAuto                Boolean                 @default(false) @map("is_auto")
+  displayTaxColumn      Boolean                 @default(false) @map("display_tax_column")
+  comment               String?                 @db.Text
+  authorizedBy          String?                 @map("authorized_by")
+  unitsOrdered          Int?                    @map("units_ordered")
+  dateCreated           DateTime?               @map("date_created") @db.Date
+  expectedDate          DateTime?               @map("expected_date") @db.Date
+  subtotalPrice         Decimal?                @map("subtotal_price") @db.Decimal(14, 2)
+  discount              Decimal?                @map("discount") @db.Decimal(14, 2)
+  discountReason        String?                 @map("discount_reason") @db.Text
+  shippingHandlingPrice Decimal?                @map("shipping_handling_price") @db.Decimal(14, 2)
+  totalTaxPrice         Decimal?                @map("total_tax_price") @db.Decimal(14, 2)
+  totalPrice            Decimal?                @map("total_price") @db.Decimal(14, 2)
+  sourceCreatedAt       DateTime?               @map("source_created_at") @db.Timestamptz
+  sourceUpdatedAt       DateTime?               @map("source_updated_at") @db.Timestamptz
+  /// When all items were received from supplier.
+  receivedAt            DateTime?               @map("received_at") @db.Timestamptz
+  /// When all line item qty+price were locked in (ready for invoicing).
+  finalizedAt           DateTime?               @map("finalized_at") @db.Timestamptz
+  completedAt           DateTime?               @map("completed_at") @db.Timestamptz
+  archivedAt            DateTime?               @map("archived_at") @db.Timestamptz
+  /// Shipping address for this PO (JSON: address1, address2, city, province, postalCode, country).
+  shippingAddress       Json?                   @map("shipping_address")
+  /// Billing address for this PO (JSON, same shape as shipping).
+  billingAddress        Json?                   @map("billing_address")
+  billingSameAsShipping Boolean                 @default(true) @map("billing_same_as_shipping")
+  supplierId            String                  @map("supplier_id")
+  supplier              Supplier                @relation(fields: [supplierId], references: [id])
+  shopifyOrders         ShopifyOrder[]
+  lineItems             PurchaseOrderLineItem[]
+  createdAt             DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([poType])
   @@index([status])
-  @@index([supplierExternalId])
+  @@index([supplierId])
   @@map("purchase_orders")
   @@schema("order")
 }
 
-/// One row per Shopify order linked to a PO (combined PO ⇒ multiple rows). Customer/address match that order.
-model PurchaseOrderShopifyOrder {
-  id              String        @id @default(cuid())
-  purchaseOrderId String        @map("purchase_order_id")
-  /// Display ref as in Shopify/export (e.g. `#1689`). Import uses `(unknown)` when the CSV had no order #.
-  orderNumber     String        @map("shopify_order_number")
-  customerPhone   String?       @map("shopify_order_customer_phone")
-  customerEmail   String?       @map("shopify_order_customer_email")
-  billingAddress  Json?         @map("billing_address")
-  shippingAddress Json?         @map("shipping_address")
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-
-  @@unique([purchaseOrderId, orderNumber])
-  @@index([orderNumber])
-  @@map("purchase_order_shopify_orders")
-  @@schema("order")
-}
-
 model PurchaseOrderLineItem {
-  id                      String        @id @default(cuid())
-  purchaseOrderId         String        @map("purchase_order_id")
-  /// Export `Product ID` column (may repeat or be absent).
-  legacyLineExternalId    Int?          @map("legacy_line_external_id")
-  /// Row order within the PO in the export file.
-  sequence                Int           @map("sequence")
+  id                      String                @id @default(cuid())
+  purchaseOrderId         String                @map("purchase_order_id")
+  legacyLineExternalId    Int?                  @map("legacy_line_external_id")
+  sequence                Int                   @map("sequence")
   quantity                Int
-  quantityReceived        Int           @default(0) @map("quantity_received")
-  supplierRef             String?       @map("supplier_ref") @db.Text
-  taxPercent              Decimal?      @map("tax_percent") @db.Decimal(9, 4)
+  quantityReceived        Int                   @default(0) @map("quantity_received")
+  supplierRef             String?               @map("supplier_ref") @db.Text
+  taxPercent              Decimal?              @map("tax_percent") @db.Decimal(9, 4)
   sku                     String?
-  variantTitle            String?       @map("variant_title")
-  productTitle            String?       @map("product_title") @db.Text
-  shopifyInventoryItemGid String?       @map("shopify_inventory_item_gid")
-  shopifyVariantGid       String?       @map("shopify_variant_gid")
-  shopifyProductGid       String?       @map("shopify_product_gid")
-  isCustom                Boolean       @default(false) @map("is_custom")
-  itemPrice               Decimal?      @map("item_price") @db.Decimal(14, 2)
-  lineSubtotalPrice       Decimal?      @map("line_subtotal_price") @db.Decimal(14, 2)
-  lineTotalTaxPrice       Decimal?      @map("line_total_tax_price") @db.Decimal(14, 2)
-  productProperties       String?       @map("product_properties") @db.Text
-  purchaseOrder           PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  variantTitle            String?               @map("variant_title")
+  productTitle            String?               @map("product_title") @db.Text
+  shopifyInventoryItemGid String?               @map("shopify_inventory_item_gid")
+  shopifyVariantGid       String?               @map("shopify_variant_gid")
+  shopifyProductGid       String?               @map("shopify_product_gid")
+  isCustom                Boolean               @default(false) @map("is_custom")
+  /// Expected supplier price per unit (from PO creation).
+  itemPrice               Decimal?              @map("item_price") @db.Decimal(14, 2)
+  lineSubtotalPrice       Decimal?              @map("line_subtotal_price") @db.Decimal(14, 2)
+  lineTotalTaxPrice       Decimal?              @map("line_total_tax_price") @db.Decimal(14, 2)
+  productProperties       String?               @map("product_properties") @db.Text
+  shopifyOrderLineItemId  String?               @map("shopify_order_line_item_id")
+  shopifyOrderLineItem    ShopifyOrderLineItem? @relation(fields: [shopifyOrderLineItemId], references: [id])
+  purchaseOrder           PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  fulfillmentLineItems    FulfillmentLineItem[]
 
   @@unique([purchaseOrderId, sequence])
   @@index([purchaseOrderId, legacyLineExternalId])
+  @@index([shopifyOrderLineItemId])
   @@map("purchase_order_line_items")
+  @@schema("order")
+}
+
+// --- Fulfillments (delivery phase, aligned with Shopify Fulfillment API) ---
+
+/// A delivery event — one shipment or driver trip. Mirrors Shopify `Fulfillment`.
+/// Multiple fulfillments can exist per order when items ship separately or from
+/// different locations. Connects PO line items to a customer destination.
+model Fulfillment {
+  id              String                @id @default(cuid())
+  /// Shopify Fulfillment GID (null for internal-only fulfillments like stock transfers).
+  shopifyGid      String?               @unique @map("shopify_gid")
+  /// supplier_direct | driver_pickup | driver_delivery | to_stock
+  method          String
+  /// Aligned with Shopify FulfillmentStatus: PENDING | OPEN | SUCCESS | CANCELLED | FAILURE
+  status          String                @default("PENDING")
+  /// Aligned with Shopify FulfillmentDisplayStatus for UI display.
+  displayStatus   String?               @map("display_status")
+  customerId      String?               @map("customer_id")
+  customer        ShopifyCustomer?      @relation(fields: [customerId], references: [id])
+  /// Reference to the Shopify order being fulfilled (for Shopify-linked fulfillments).
+  shopifyOrderId  String?               @map("shopify_order_id")
+  shopifyOrder    ShopifyOrder?         @relation(fields: [shopifyOrderId], references: [id])
+  driverId        String?               @map("driver_id")
+  trackingCompany String?               @map("tracking_company")
+  trackingNumber  String?               @map("tracking_number")
+  trackingUrl     String?               @map("tracking_url")
+  originAddress   Json?                 @map("origin_address")
+  scheduledAt     DateTime?             @map("scheduled_at") @db.Timestamptz
+  inTransitAt     DateTime?             @map("in_transit_at") @db.Timestamptz
+  deliveredAt     DateTime?             @map("delivered_at") @db.Timestamptz
+  notes           String?               @db.Text
+  lineItems       FulfillmentLineItem[]
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([customerId])
+  @@index([shopifyOrderId])
+  @@index([status])
+  @@index([method])
+  @@map("fulfillments")
+  @@schema("order")
+}
+
+/// Per-item allocation within a fulfillment. Mirrors Shopify `FulfillmentLineItem`.
+/// Links a PO line item to a specific delivery + customer with finalized qty/price.
+/// This is the source of truth for invoicing: customer X got Y units at Z price from supplier W.
+model FulfillmentLineItem {
+  id                      String                 @id @default(cuid())
+  fulfillmentId           String                 @map("fulfillment_id")
+  fulfillment             Fulfillment            @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  purchaseOrderLineItemId String?                @map("purchase_order_line_item_id")
+  purchaseOrderLineItem   PurchaseOrderLineItem? @relation(fields: [purchaseOrderLineItemId], references: [id])
+  shopifyOrderLineItemId  String?                @map("shopify_order_line_item_id")
+  shopifyOrderLineItem    ShopifyOrderLineItem?  @relation(fields: [shopifyOrderLineItemId], references: [id])
+  /// Quantity allocated to this customer in this delivery.
+  quantity                Int
+  /// Supplier's actual price per unit (may differ from PO expected price).
+  unitPrice               Decimal?               @map("unit_price") @db.Decimal(14, 2)
+  /// Optional markup for external customers (null = pass-through at cost).
+  marginPercent           Decimal?               @map("margin_percent") @db.Decimal(5, 2)
+  /// When qty + price were locked in for invoicing.
+  finalizedAt             DateTime?              @map("finalized_at") @db.Timestamptz
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([fulfillmentId])
+  @@index([purchaseOrderLineItemId])
+  @@index([shopifyOrderLineItemId])
+  @@map("fulfillment_line_items")
   @@schema("order")
 }

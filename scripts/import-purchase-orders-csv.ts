@@ -1,6 +1,9 @@
 /**
- * Idempotent import of Shopify Auto Purchase Orders CSV export into
- * `order.purchase_orders` + `order.purchase_order_line_items`.
+ * Import Shopify Auto Purchase Orders CSV export into
+ * `order.purchase_orders` + `order.purchase_order_line_items`,
+ * linking to `order.shopify_orders` via the implicit many-to-many.
+ *
+ * IMPORTANT: Run `pnpm sync:shopify` FIRST so ShopifyOrder rows exist for matching.
  *
  * Usage:
  *   pnpm import:po -- /path/to/purchase_orders_export.csv
@@ -65,36 +68,6 @@ function parseExportDateTime(s: string | undefined): Date | null {
   return null;
 }
 
-function billingJson(row: CsvRow): Prisma.InputJsonValue {
-  return {
-    company: emptyToNull(row['Billing address Company']),
-    contactName: emptyToNull(row['Billing address Contact name']),
-    city: emptyToNull(row['Billing address City']),
-    country: emptyToNull(row['Billing address Country']),
-    countryCode: emptyToNull(row['Billing address Country code']),
-    phone: emptyToNull(row['Billing address Phone']),
-    addressLine1: emptyToNull(row['Billing address Address line 1']),
-    addressLine2: emptyToNull(row['Billing address Address line 2']),
-    region: emptyToNull(row['Billing address Region']),
-    postalCode: emptyToNull(row['Billing address Postal code']),
-  };
-}
-
-function shippingJson(row: CsvRow): Prisma.InputJsonValue {
-  return {
-    company: emptyToNull(row['Shipping address Company']),
-    contactName: emptyToNull(row['Shipping address Contact name']),
-    city: emptyToNull(row['Shipping address City']),
-    country: emptyToNull(row['Shipping address Country']),
-    countryCode: emptyToNull(row['Shipping address Country code']),
-    phone: emptyToNull(row['Shipping address Phone']),
-    addressLine1: emptyToNull(row['Shipping address Address line 1']),
-    addressLine2: emptyToNull(row['Shipping address Address line 2']),
-    region: emptyToNull(row['Shipping address Region']),
-    postalCode: emptyToNull(row['Shipping address Postal code']),
-  };
-}
-
 function headerPayload(row: CsvRow) {
   const legacyExternalId = parseIntOrNull(row['ID']);
   if (legacyExternalId === null) {
@@ -104,7 +77,7 @@ function headerPayload(row: CsvRow) {
   return {
     legacyExternalId,
     poNumber: row['PO number']?.trim() ?? String(legacyExternalId),
-    status: row['Status']?.trim() ?? 'unknown',
+    legacyCsvStatus: row['Status']?.trim() ?? null,
     currency: row['Currency']?.trim() ?? 'USD',
     isAuto: yn(row['Is Auto']),
     displayTaxColumn: yn(row['Display tax column']),
@@ -122,52 +95,28 @@ function headerPayload(row: CsvRow) {
     sourceCreatedAt: parseExportDateTime(row['Created at']),
     sourceUpdatedAt: parseExportDateTime(row['Updated at']),
     completedAt: parseExportDateTime(row['Completed at']),
-    supplierExternalId: parseIntOrNull(row['Supplier ID']),
     supplierCompany: emptyToNull(row['Supplier company']),
     supplierContactName: emptyToNull(row['Supplier contact name']),
-  };
-}
-
-const UNKNOWN_SHOPIFY_ORDER = '(unknown)';
-
-function contactAndAddressesFromRow(row: CsvRow) {
-  return {
-    customerPhone: emptyToNull(row['Shopify Order Customer phone']),
-    customerEmail: emptyToNull(row['Shopify Order Customer email']),
-    billingAddress: billingJson(row),
-    shippingAddress: shippingJson(row),
+    supplierContactEmail: emptyToNull(row['Supplier contact email']),
   };
 }
 
 /**
- * One link per distinct `Shopify Order #` in the PO (combined orders).
- * Contact/address are taken from the first CSV row seen for that order number.
- * If no order # appears anywhere, a single row uses `(unknown)` and `group[0]` for contact/address.
+ * Collect distinct Shopify order names (e.g. "#5902") from all CSV rows in a PO group.
+ * The CSV column "Shopify Order #" may contain a single value like "#5902".
  */
-function buildShopifyOrderLinksFromGroup(group: CsvRow[]) {
-  const byOrderNum = new Map<string, CsvRow>();
+function collectShopifyOrderNames(group: CsvRow[]): string[] {
+  const names = new Set<string>();
   for (const row of group) {
-    const num = row['Shopify Order #']?.trim();
-    if (num && !byOrderNum.has(num)) {
-      byOrderNum.set(num, row);
+    const raw = row['Shopify Order #']?.trim();
+    if (!raw) continue;
+    // Handle comma-separated order numbers (e.g. "#5882, #5881")
+    for (const part of raw.split(',')) {
+      const name = part.trim();
+      if (name && name !== '(unknown)') names.add(name);
     }
   }
-
-  if (byOrderNum.size === 0 && group.length > 0) {
-    return [
-      {
-        orderNumber: UNKNOWN_SHOPIFY_ORDER,
-        ...contactAndAddressesFromRow(group[0]),
-      },
-    ];
-  }
-
-  return [...byOrderNum.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(([orderNumber, row]) => ({
-      orderNumber,
-      ...contactAndAddressesFromRow(row),
-    }));
+  return [...names];
 }
 
 function linePayload(row: CsvRow, sequence: number) {
@@ -181,7 +130,9 @@ function linePayload(row: CsvRow, sequence: number) {
     sku: emptyToNull(row['Product SKU']),
     variantTitle: emptyToNull(row['Product Variant title']),
     productTitle: emptyToNull(row['Product title']),
-    shopifyInventoryItemGid: emptyToNull(row['Product Shopify InventoryItemID']),
+    shopifyInventoryItemGid: emptyToNull(
+      row['Product Shopify InventoryItemID'],
+    ),
     shopifyVariantGid: emptyToNull(row['Product Shopify VariantID']),
     shopifyProductGid: emptyToNull(row['Product Shopify ProductID']),
     isCustom: yn(row['Product Is custom']),
@@ -229,58 +180,134 @@ async function main() {
 
   console.log(`Parsed ${rows.length} CSV rows, ${byPo.size} purchase orders.`);
 
+  // --- Step 1: Drop existing PO data ---
+  console.log('[import] Clearing existing PO data…');
+  await prisma.purchaseOrderLineItem.deleteMany({});
+  await prisma.$executeRawUnsafe(
+    `DELETE FROM "order"."_PurchaseOrderToShopifyOrder"`,
+  );
+  await prisma.purchaseOrder.deleteMany({});
+  console.log('[import] Existing PO data cleared.');
+
+  // --- Step 2: Pre-load ShopifyOrder name→id lookup ---
+  console.log('[import] Loading ShopifyOrder lookup map…');
+  const allShopifyOrders = await prisma.shopifyOrder.findMany({
+    select: { id: true, name: true, displayFulfillmentStatus: true },
+  });
+  type ShopifyOrderRef = { id: string; fulfillStatus: string | null };
+  const shopifyOrderByName = new Map<string, ShopifyOrderRef>();
+  for (const so of allShopifyOrders) {
+    const ref: ShopifyOrderRef = { id: so.id, fulfillStatus: so.displayFulfillmentStatus };
+    shopifyOrderByName.set(so.name, ref);
+    const stripped = so.name.replace(/^#/, '');
+    if (!shopifyOrderByName.has(stripped)) {
+      shopifyOrderByName.set(stripped, ref);
+    }
+  }
+  console.log(`[import] Loaded ${allShopifyOrders.length} ShopifyOrder records for matching.`);
+
+  // --- Step 2b: Deduplicate PO numbers (12 CSV POs share a number with another) ---
+  const poNumberCounts = new Map<string, number>();
+  const poIdToNumber = new Map<number, string>();
+  for (const [legacyId, group] of byPo) {
+    const rawPo = group[0]['PO number']?.trim() ?? String(legacyId);
+    const count = (poNumberCounts.get(rawPo) ?? 0) + 1;
+    poNumberCounts.set(rawPo, count);
+    poIdToNumber.set(legacyId, count > 1 ? `${rawPo} (${count})` : rawPo);
+  }
+  const dupeCount = [...poNumberCounts.values()].filter((c) => c > 1).reduce((a, b) => a + b - 1, 0);
+  if (dupeCount > 0) console.log(`[import] Disambiguated ${dupeCount} duplicate PO numbers.`);
+
+  // --- Step 3: Import POs ---
+  const supplierIdCache = new Map<string, string>();
+
+  async function resolveSupplier(
+    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+    company: string | null,
+    contactName: string | null,
+    contactEmail: string | null,
+  ): Promise<string> {
+    const name = company?.trim() || '(unknown supplier)';
+    const key = name.toLowerCase();
+    const cached = supplierIdCache.get(key);
+    if (cached) return cached;
+    const supplier = await tx.supplier.upsert({
+      where: { shopifyVendorName: name },
+      create: {
+        company: name,
+        shopifyVendorName: name,
+        contactName,
+        contactEmail,
+      },
+      update: {},
+    });
+    supplierIdCache.set(key, supplier.id);
+    return supplier.id;
+  }
+
   let done = 0;
-  for (const [, group] of byPo) {
+  let linkedCount = 0;
+  let unmatchedNames = 0;
+
+  for (const [legacyId, group] of byPo) {
     const first = group[0];
     const header = headerPayload(first);
 
     await prisma.$transaction(async (tx) => {
-      const po = await tx.purchaseOrder.upsert({
-        where: { legacyExternalId: header.legacyExternalId },
-        create: header,
-        update: {
-          poNumber: header.poNumber,
-          status: header.status,
-          currency: header.currency,
-          isAuto: header.isAuto,
-          displayTaxColumn: header.displayTaxColumn,
-          comment: header.comment,
-          authorizedBy: header.authorizedBy,
-          unitsOrdered: header.unitsOrdered,
-          dateCreated: header.dateCreated,
-          expectedDate: header.expectedDate,
-          subtotalPrice: header.subtotalPrice,
-          discount: header.discount,
-          discountReason: header.discountReason,
-          shippingHandlingPrice: header.shippingHandlingPrice,
-          totalTaxPrice: header.totalTaxPrice,
-          totalPrice: header.totalPrice,
-          sourceCreatedAt: header.sourceCreatedAt,
-          sourceUpdatedAt: header.sourceUpdatedAt,
-          completedAt: header.completedAt,
-          supplierExternalId: header.supplierExternalId,
-          supplierCompany: header.supplierCompany,
-          supplierContactName: header.supplierContactName,
+      const supplierId = await resolveSupplier(
+        tx,
+        header.supplierCompany,
+        header.supplierContactName,
+        header.supplierContactEmail,
+      );
+
+      // Resolve linked ShopifyOrder refs from CSV "Shopify Order #" column
+      const orderNames = collectShopifyOrderNames(group);
+      const matchedRefs: ShopifyOrderRef[] = [];
+      for (const name of orderNames) {
+        const ref = shopifyOrderByName.get(name);
+        if (ref) {
+          matchedRefs.push(ref);
+        } else {
+          unmatchedNames++;
+        }
+      }
+
+      // Compute fulfillment-based status from linked Shopify orders
+      const fulfilledCount = matchedRefs.filter(
+        (r) => r.fulfillStatus === 'FULFILLED',
+      ).length;
+      const total = matchedRefs.length;
+      const allFulfilled = total > 0 && fulfilledCount === total;
+      let status: string;
+      if (header.completedAt && allFulfilled) status = 'completed';
+      else if (allFulfilled) status = 'fulfilled';
+      else if (fulfilledCount > 0) status = 'partially_fulfilled';
+      else status = 'unfulfilled';
+
+      const {
+        supplierCompany: _sc,
+        supplierContactName: _scn,
+        supplierContactEmail: _sce,
+        legacyCsvStatus: _ls,
+        ...cleanHeader
+      } = header;
+
+      // Use deduplicated PO number
+      cleanHeader.poNumber = poIdToNumber.get(legacyId) ?? cleanHeader.poNumber;
+
+      const po = await tx.purchaseOrder.create({
+        data: {
+          ...cleanHeader,
+          status,
+          supplierId,
+          shopifyOrders: matchedRefs.length > 0
+            ? { connect: matchedRefs.map((r) => ({ id: r.id })) }
+            : undefined,
         },
       });
 
-      await tx.purchaseOrderLineItem.deleteMany({
-        where: { purchaseOrderId: po.id },
-      });
-
-      await tx.purchaseOrderShopifyOrder.deleteMany({
-        where: { purchaseOrderId: po.id },
-      });
-
-      const shopifyLinks = buildShopifyOrderLinksFromGroup(group);
-      if (shopifyLinks.length > 0) {
-        await tx.purchaseOrderShopifyOrder.createMany({
-          data: shopifyLinks.map((link) => ({
-            purchaseOrderId: po.id,
-            ...link,
-          })),
-        });
-      }
+      linkedCount += matchedRefs.length;
 
       const lines = group.map((r, sequence) => ({
         ...linePayload(r, sequence),
@@ -296,7 +323,11 @@ async function main() {
     }
   }
 
-  console.log(`Done. Upserted ${byPo.size} purchase orders.`);
+  console.log(
+    `[import] Done. Created ${byPo.size} POs, ` +
+    `linked ${linkedCount} ShopifyOrder relations, ` +
+    `${unmatchedNames} order names had no ShopifyOrder match.`,
+  );
 }
 
 main()

@@ -10,8 +10,9 @@ import { AppError, GENERIC_ERROR_MESSAGE } from '@/lib/core/errors';
 import { getCurrentYearMonth, isValidYearMonth } from '@/lib/utils';
 import type { QuickBooksApiContext } from '@/features/dashboard/budget';
 import type { BudgetDataType } from '@/features/dashboard/budget';
+import { getDefaultDashboardLocationId } from '@/lib/dashboard/default-location';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 
 type Props = { searchParams: Promise<{ yearMonth?: string }> };
 
@@ -22,7 +23,13 @@ export default async function BudgetPage({ searchParams }: Props) {
   const { yearMonth: searchYearMonth } = await searchParams;
   const yearMonth = searchYearMonth ?? getCurrentYearMonth();
   if (!isValidYearMonth(yearMonth)) {
-    redirect(`/dashboard/cost?yearMonth=${getCurrentYearMonth()}`);
+    const defaultLocationId = await getDefaultDashboardLocationId();
+    if (!defaultLocationId) {
+      notFound();
+    }
+    redirect(
+      `/dashboard/location/${defaultLocationId}?yearMonth=${getCurrentYearMonth()}`,
+    );
   }
 
   // ===============================

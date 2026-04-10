@@ -4,6 +4,9 @@ import type { ShopifyAdminCredentials } from '@/types/shopify';
  * Single-store Admin API credentials from the environment.
  * Set `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_TOKEN`; optional `SHOPIFY_API_VERSION` (default 2024-10).
  * Distinct from `cost.shopify_config`, which remains for cost-module DB-backed config.
+ *
+ * Office order edits need `write_order_edits`; product search / variant price updates need
+ * `read_products` / `write_products` on the Admin token.
  */
 
 const DEFAULT_API_VERSION = '2024-10';

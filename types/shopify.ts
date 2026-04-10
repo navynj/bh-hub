@@ -77,12 +77,24 @@ export interface ShopifyOrdersPageInfo {
   endCursor: string | null;
 }
 
+/** GraphQL `LineItem.id` — `gid://shopify/LineItem/...` */
 export interface ShopifyOrderLineNode {
   id: string;
   title: string;
   quantity: number;
   sku: string | null;
-  variant: { id: string; title: string | null; sku: string | null } | null;
+  vendor: string | null;
+  discountedUnitPriceSet?: {
+    shopMoney?: { amount: string; currencyCode?: string } | null;
+  } | null;
+  variant: {
+    id: string;
+    title: string | null;
+    sku: string | null;
+    inventoryItem?: {
+      unitCost?: { amount: string } | null;
+    } | null;
+  } | null;
 }
 
 /** Order.customer (null for some guest checkouts). */
@@ -93,6 +105,124 @@ export interface ShopifyOrderCustomer {
   lastName: string | null;
   email: string | null;
   phone: string | null;
+  defaultAddress?: ShopifyMailingAddress | null;
+}
+
+/**
+ * Shopify Admin GraphQL enum `OrderDisplayFinancialStatus` (`Order.displayFinancialStatus`).
+ * @see https://shopify.dev/docs/api/admin-graphql/latest/enums/OrderDisplayFinancialStatus
+ */
+export const SHOPIFY_ORDER_DISPLAY_FINANCIAL_STATUSES = [
+  'AUTHORIZED',
+  'EXPIRED',
+  'PAID',
+  'PARTIALLY_PAID',
+  'PARTIALLY_REFUNDED',
+  'PENDING',
+  'REFUNDED',
+  'VOIDED',
+] as const;
+
+export type ShopifyOrderDisplayFinancialStatus =
+  (typeof SHOPIFY_ORDER_DISPLAY_FINANCIAL_STATUSES)[number];
+
+/**
+ * Shopify Admin GraphQL enum `OrderDisplayFulfillmentStatus` (`Order.displayFulfillmentStatus`).
+ * @see https://shopify.dev/docs/api/admin-graphql/latest/enums/OrderDisplayFulfillmentStatus
+ */
+export const SHOPIFY_ORDER_DISPLAY_FULFILLMENT_STATUSES = [
+  'FULFILLED',
+  'IN_PROGRESS',
+  'ON_HOLD',
+  'OPEN',
+  'PARTIALLY_FULFILLED',
+  'PENDING_FULFILLMENT',
+  'REQUEST_DECLINED',
+  'RESTOCKED',
+  'SCHEDULED',
+  'UNFULFILLED',
+] as const;
+
+export type ShopifyOrderDisplayFulfillmentStatus =
+  (typeof SHOPIFY_ORDER_DISPLAY_FULFILLMENT_STATUSES)[number];
+
+export function isShopifyOrderDisplayFinancialStatus(
+  value: string,
+): value is ShopifyOrderDisplayFinancialStatus {
+  return (SHOPIFY_ORDER_DISPLAY_FINANCIAL_STATUSES as readonly string[]).includes(value);
+}
+
+export function isShopifyOrderDisplayFulfillmentStatus(
+  value: string,
+): value is ShopifyOrderDisplayFulfillmentStatus {
+  return (SHOPIFY_ORDER_DISPLAY_FULFILLMENT_STATUSES as readonly string[]).includes(value);
+}
+
+const SHOPIFY_ORDER_DISPLAY_FINANCIAL_LABELS: Record<
+  ShopifyOrderDisplayFinancialStatus,
+  string
+> = {
+  AUTHORIZED: 'Authorized',
+  EXPIRED: 'Expired',
+  PAID: 'Paid',
+  PARTIALLY_PAID: 'Partially paid',
+  PARTIALLY_REFUNDED: 'Partially refunded',
+  PENDING: 'Pending',
+  REFUNDED: 'Refunded',
+  VOIDED: 'Voided',
+};
+
+const SHOPIFY_ORDER_DISPLAY_FULFILLMENT_LABELS: Record<
+  ShopifyOrderDisplayFulfillmentStatus,
+  string
+> = {
+  FULFILLED: 'Fulfilled',
+  IN_PROGRESS: 'In progress',
+  ON_HOLD: 'On hold',
+  OPEN: 'Open',
+  PARTIALLY_FULFILLED: 'Partially fulfilled',
+  PENDING_FULFILLMENT: 'Pending fulfillment',
+  REQUEST_DECLINED: 'Request declined',
+  RESTOCKED: 'Restocked',
+  SCHEDULED: 'Scheduled',
+  UNFULFILLED: 'Unfulfilled',
+};
+
+/** Human-readable label; unknown strings pass through (forward-compatible). */
+export function formatShopifyOrderDisplayFinancialStatus(
+  status: string | null | undefined,
+): string {
+  if (status == null || status === '') return '—';
+  if (isShopifyOrderDisplayFinancialStatus(status)) {
+    return SHOPIFY_ORDER_DISPLAY_FINANCIAL_LABELS[status];
+  }
+  return status;
+}
+
+/** Human-readable label; unknown strings pass through (forward-compatible). */
+export function formatShopifyOrderDisplayFulfillmentStatus(
+  status: string | null | undefined,
+): string {
+  if (status == null || status === '') return '—';
+  if (isShopifyOrderDisplayFulfillmentStatus(status)) {
+    return SHOPIFY_ORDER_DISPLAY_FULFILLMENT_LABELS[status];
+  }
+  return status;
+}
+
+export interface ShopifyMailingAddress {
+  address1: string | null;
+  address2: string | null;
+  city: string | null;
+  /** Full region name; often empty when only `provinceCode` is set. */
+  province: string | null;
+  /** ISO-style region code (e.g. ON, BC); prefer this for Canadian dropdowns. */
+  provinceCode?: string | null;
+  country: string | null;
+  zip: string | null;
+  company: string | null;
+  name: string | null;
+  phone: string | null;
 }
 
 export interface ShopifyOrderNode {
@@ -102,12 +232,14 @@ export interface ShopifyOrderNode {
   customer: ShopifyOrderCustomer | null;
   processedAt: string | null;
   createdAt: string;
-  displayFinancialStatus: string | null;
-  displayFulfillmentStatus: string | null;
+  displayFinancialStatus: ShopifyOrderDisplayFinancialStatus | null;
+  displayFulfillmentStatus: ShopifyOrderDisplayFulfillmentStatus | null;
   currencyCode: string;
   totalPriceSet: {
     shopMoney: { amount: string; currencyCode: string };
   };
+  billingAddress: ShopifyMailingAddress | null;
+  shippingAddress: ShopifyMailingAddress | null;
   lineItems: {
     edges: Array<{ node: ShopifyOrderLineNode }>;
   };

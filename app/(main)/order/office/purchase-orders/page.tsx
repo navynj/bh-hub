@@ -2,8 +2,11 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/core/prisma';
 import { format } from 'date-fns';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
+
+const PAGE_SIZE = 50;
 
 function formatMoney(amount: unknown, currency: string): string {
   if (amount == null) return '—';
@@ -40,35 +43,49 @@ function formatDateTime(d: Date | null | undefined): string {
   }
 }
 
-export default async function OfficePurchaseOrdersPage() {
+export default async function OfficePurchaseOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect('/auth');
 
-  const rows = await prisma.purchaseOrder.findMany({
-    orderBy: [{ sourceCreatedAt: 'desc' }, { createdAt: 'desc' }],
-    take: 100,
-    select: {
-      id: true,
-      poNumber: true,
-      status: true,
-      currency: true,
-      isAuto: true,
-      dateCreated: true,
-      sourceCreatedAt: true,
-      expectedDate: true,
-      totalPrice: true,
-      supplierCompany: true,
-      supplierContactName: true,
-      _count: { select: { lineItems: true, shopifyOrderRefs: true } },
-    },
-  });
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? '1', 10) || 1);
+  const skip = (page - 1) * PAGE_SIZE;
+
+  const [rows, totalCount] = await Promise.all([
+    prisma.purchaseOrder.findMany({
+      orderBy: [{ sourceCreatedAt: 'desc' }, { createdAt: 'desc' }],
+      take: PAGE_SIZE,
+      skip,
+      select: {
+        id: true,
+        poNumber: true,
+        status: true,
+        currency: true,
+        isAuto: true,
+        dateCreated: true,
+        sourceCreatedAt: true,
+        expectedDate: true,
+        totalPrice: true,
+        supplier: { select: { company: true, contactName: true } },
+        _count: { select: { lineItems: true, shopifyOrders: true } },
+      },
+    }),
+    prisma.purchaseOrder.count(),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div className="max-w-6xl space-y-4">
       <div>
         <h1 className="text-lg font-semibold">Office — Purchase Orders</h1>
         <p className="text-sm text-muted-foreground">
-          Imported purchase orders (up to 100 most recent).
+          {totalCount} purchase order{totalCount === 1 ? '' : 's'} total
+          {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ''}.
         </p>
       </div>
 
@@ -121,8 +138,8 @@ export default async function OfficePurchaseOrdersPage() {
               <tbody className="[&_tr:last-child]:border-0">
                 {rows.map((po) => {
                   const supplier =
-                    po.supplierCompany?.trim() ||
-                    po.supplierContactName?.trim() ||
+                    po.supplier?.company?.trim() ||
+                    po.supplier?.contactName?.trim() ||
                     '—';
                   const created = po.sourceCreatedAt ?? po.dateCreated;
                   return (
@@ -133,7 +150,7 @@ export default async function OfficePurchaseOrdersPage() {
                       <td className="p-2 align-middle font-medium">
                         {po.poNumber}
                       </td>
-                      <td className="p-2 align-middle">{po.status}</td>
+                      <td className="p-2 align-middle capitalize">{po.status}</td>
                       <td className="max-w-[14rem] p-2 align-middle">
                         {supplier}
                       </td>
@@ -153,7 +170,7 @@ export default async function OfficePurchaseOrdersPage() {
                         {po._count.lineItems}
                       </td>
                       <td className="p-2 text-right align-middle tabular-nums">
-                        {po._count.shopifyOrderRefs}
+                        {po._count.shopifyOrders}
                       </td>
                     </tr>
                   );
@@ -161,6 +178,34 @@ export default async function OfficePurchaseOrdersPage() {
               </tbody>
             </table>
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-3">
+              {page > 1 ? (
+                <Link
+                  href={page === 2 ? '/order/office/purchase-orders' : `/order/office/purchase-orders?page=${page - 1}`}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  &larr; Previous
+                </Link>
+              ) : (
+                <div />
+              )}
+              <span className="text-sm text-muted-foreground">
+                Page {page} of {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link
+                  href={`/order/office/purchase-orders?page=${page + 1}`}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Next &rarr;
+                </Link>
+              ) : (
+                <div />
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 import { ClassName } from '@/types/className';
-import { UserRole } from '@prisma/client';
+import type { UserRole } from '@/types/user';
 import { PropsWithChildren } from 'react';
 import HeaderNavItem from './HeaderNavItem';
 import {
@@ -32,14 +32,14 @@ const HeaderNav = ({
             <HeaderNavItem href="/report">Reports</HeaderNavItem>
           </>
         )}
+        {getCanSeeOrderSection(role) && (
+          <HeaderNavItem href="/order">Order</HeaderNavItem>
+        )}
         {getCanSeeDeliveryAndCost(role) && (
           <>
             <HeaderNavItem href="/delivery">Delivery</HeaderNavItem>
             {/* <HeaderNavItem href="/cost">Cost</HeaderNavItem> */}
           </>
-        )}
-        {getCanSeeOrderSection(role) && (
-          <HeaderNavItem href="/order">Order</HeaderNavItem>
         )}
       </div>
       {getOfficeOrAdmin(role) && (

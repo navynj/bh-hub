@@ -1,10 +1,10 @@
 'use client';
 
-import { Location } from '@prisma/client';
+import type { LocationSummary } from '@/types/location';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-const LocationLinkItem = ({ location }: { location: Location }) => {
+const LocationLinkItem = ({ location }: { location: LocationSummary }) => {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryString = searchParams?.toString()

@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { OfficeDataSyncClient } from '@/features/order/office/components/OfficeDataSyncClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,11 +9,9 @@ export default async function OfficeOrderSettingsPage() {
   if (!session?.user?.id) redirect('/auth');
 
   return (
-    <div className="max-w-3xl space-y-2">
-      <h1 className="text-lg font-semibold">Office — Settings</h1>
-      <p className="text-sm text-muted-foreground">
-        Order workflow and integration settings will appear here.
-      </p>
+    <div className="max-w-3xl space-y-4">
+      <h1 className="text-lg font-semibold">Office — Data & Sync</h1>
+      <OfficeDataSyncClient />
     </div>
   );
 }

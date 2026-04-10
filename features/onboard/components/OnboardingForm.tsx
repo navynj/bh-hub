@@ -30,7 +30,7 @@ import { ROLES } from '@/constants/role';
 import { api } from '@/lib/api';
 import { ClassName } from '@/types/className';
 import { zodResolver } from '@hookform/resolvers/zod';
-import type { Location } from '@prisma/client';
+import type { LocationSummary } from '@/types/location';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -38,7 +38,7 @@ import { z } from 'zod';
 const onboardingSchema = z
   .object({
     name: z.string().min(1, 'Display name is required'),
-    role: z.enum(['manager', 'assistant', 'office', 'admin']),
+    role: z.enum(['manager', 'assistant', 'office']),
     locationId: z.string().optional(),
   })
   .refine(
@@ -51,7 +51,7 @@ const onboardingSchema = z
 type OnboardingFormValues = z.infer<typeof onboardingSchema>;
 
 interface OnboardingFormProps extends ClassName {
-  locations: Location[];
+  locations: LocationSummary[];
   userName?: string | null;
 }
 
@@ -137,7 +137,7 @@ export function OnboardingForm({
                         <SelectValue placeholder="Select role" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ROLES.map((opt) => (
+                        {ROLES.filter((opt) => opt.value !== 'admin').map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>

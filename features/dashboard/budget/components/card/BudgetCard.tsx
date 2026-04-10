@@ -109,7 +109,7 @@ function BudgetCard({
               href={
                 isLocationPage
                   ? '#'
-                  : `/dashboard/cost/location/${budget.locationId}?yearMonth=${yearMonth}`
+                  : `/dashboard/location/${budget.locationId}?yearMonth=${yearMonth}`
               }
               className={cn(
                 'group w-full link-underline-anim !flex items-center justify-between gap-2',

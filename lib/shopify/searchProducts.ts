@@ -1,0 +1,106 @@
+/**
+ * Admin GraphQL product search for office “add line” flows. Requires `read_products`.
+ */
+
+import { createAdminApiClient } from '@shopify/admin-api-client';
+import { getShopifyAdminEnv } from '@/lib/shopify/env';
+import type { ShopifyAdminCredentials } from '@/types/shopify';
+
+const PRODUCTS_SEARCH = `query OfficeProductsSearch($first: Int!, $query: String!) {
+  products(first: $first, query: $query) {
+    edges {
+      node {
+        id
+        title
+        handle
+        variants(first: 50) {
+          edges {
+            node {
+              id
+              title
+              sku
+              price
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+export type OfficeProductSearchVariantHit = {
+  productId: string;
+  productTitle: string;
+  variantId: string;
+  variantTitle: string | null;
+  sku: string | null;
+  price: string | null;
+};
+
+export type OfficeProductSearchData = {
+  products: {
+    edges: Array<{
+      node: {
+        id: string;
+        title: string;
+        handle: string;
+        variants: {
+          edges: Array<{
+            node: {
+              id: string;
+              title: string | null;
+              sku: string | null;
+              price: string | null;
+            };
+          }>;
+        };
+      };
+    }>;
+  };
+};
+
+export async function searchProductsForOffice(
+  creds: ShopifyAdminCredentials,
+  query: string,
+  first = 15,
+): Promise<OfficeProductSearchVariantHit[]> {
+  const client = createAdminApiClient({
+    storeDomain: creds.shopDomain.replace(/^https?:\/\//, '').replace(/\/$/, ''),
+    apiVersion: creds.apiVersion,
+    accessToken: creds.accessToken,
+  });
+
+  const { data, errors } = await client.request<OfficeProductSearchData>(PRODUCTS_SEARCH, {
+    variables: { first, query },
+  });
+  const errList = Array.isArray(errors) ? errors : errors ? [errors] : [];
+  if (errList.length > 0) {
+    const msg = errList
+      .map((e) =>
+        e && typeof e === 'object' && 'message' in e ? String((e as { message?: string }).message) : String(e),
+      )
+      .join('; ');
+    throw new Error(`Shopify products search failed: ${msg}`);
+  }
+
+  const hits: OfficeProductSearchVariantHit[] = [];
+  for (const edge of data?.products?.edges ?? []) {
+    const p = edge.node;
+    for (const ve of p.variants.edges) {
+      const v = ve.node;
+      hits.push({
+        productId: p.id,
+        productTitle: p.title,
+        variantId: v.id,
+        variantTitle: v.title,
+        sku: v.sku,
+        price: v.price ?? null,
+      });
+    }
+  }
+  return hits;
+}
+
+export function searchProductsForOfficeFromEnv(query: string, first?: number) {
+  return searchProductsForOffice(getShopifyAdminEnv(), query, first);
+}

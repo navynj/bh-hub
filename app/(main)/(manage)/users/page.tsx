@@ -11,7 +11,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { UserRole, UserStatus } from '@prisma/client';
+import {
+  USER_ROLES,
+  USER_STATUSES,
+  type UserRole,
+  type UserStatus,
+} from '@/types/user';
 import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { Check, Pencil, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -29,19 +34,18 @@ type UserRow = {
 
 type LocationOption = { id: string; code: string; name: string };
 
-const ROLE_OPTIONS: { value: UserRole; label: string }[] = Object.values(
-  UserRole,
-).map((r) => ({
-  value: r as UserRole,
-  label: r.charAt(0).toUpperCase() + r.slice(1),
-}));
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = USER_ROLES.map(
+  (r) => ({
+    value: r,
+    label: r.charAt(0).toUpperCase() + r.slice(1),
+  }),
+);
 
-const STATUS_OPTIONS: { value: UserStatus; label: string }[] = Object.values(
-  UserStatus,
-).map((s) => ({
-  value: s as UserStatus,
-  label: s.charAt(0).toUpperCase() + s.slice(1),
-}));
+const STATUS_OPTIONS: { value: UserStatus; label: string }[] =
+  USER_STATUSES.map((s) => ({
+    value: s,
+    label: s.charAt(0).toUpperCase() + s.slice(1),
+  }));
 
 /** Sentinel for "no location" so we never use empty string as SelectItem value. */
 const NO_LOCATION_VALUE = '__none__';

@@ -111,7 +111,8 @@ export function handleApiError(error: unknown): NextResponse {
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    const dbError = new DatabaseError(error.message, error);
+    const prismaError = error as Prisma.PrismaClientKnownRequestError;
+    const dbError = new DatabaseError(prismaError.message, prismaError);
     return NextResponse.json(
       { error: dbError.userMessage, code: dbError.code },
       { status: dbError.statusCode },

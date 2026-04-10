@@ -23,9 +23,7 @@ export async function POST(request: Request) {
     }
   }
 
-  // Admin is active immediately; office and manager need approval
-  const status: UserStatus =
-    role === "admin" ? "active" : "pending_approval";
+  const status: UserStatus = "pending_approval";
 
   await prisma.user.update({
     where: { id: session.user.id },

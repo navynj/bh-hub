@@ -5,6 +5,7 @@
  */
 import { AppError } from '@/lib/core/errors';
 import { prisma } from '@/lib/core/prisma';
+import { mapLegacyDashboardCostPath } from '@/lib/dashboard/default-location';
 import {
   getQuickBooksOAuthClient,
   getQuickBooksCompanyName,
@@ -123,9 +124,11 @@ export async function GET(request: NextRequest) {
     let redirectPath: string;
     if (returnTo) {
       const safe = safeRedirectPath(returnTo);
-      redirectPath = safe ?? '/';
+      redirectPath = safe
+        ? await mapLegacyDashboardCostPath(safe)
+        : '/';
     } else if (locationId) {
-      redirectPath = `/dashboard/cost/location/${locationId}`;
+      redirectPath = `/dashboard/location/${locationId}`;
     } else {
       redirectPath = '/';
     }

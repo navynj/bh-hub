@@ -3,9 +3,16 @@ import { fetchShopifyOrdersPageFromEnv } from '@/lib/shopify/fetchOrders';
 import { isShopifyAdminEnvConfigured } from '@/lib/shopify/env';
 import { format, parseISO } from 'date-fns';
 import { redirect } from 'next/navigation';
-import type { ShopifyOrderNode } from '@/types/shopify';
+import Link from 'next/link';
+import {
+  formatShopifyOrderDisplayFinancialStatus,
+  formatShopifyOrderDisplayFulfillmentStatus,
+  type ShopifyOrderNode,
+} from '@/types/shopify';
 
 export const dynamic = 'force-dynamic';
+
+const PAGE_SIZE = 25;
 
 function formatOrderMoney(node: ShopifyOrderNode): string {
   const amount = node.totalPriceSet?.shopMoney?.amount;
@@ -69,10 +76,15 @@ function formatCustomerCell(o: ShopifyOrderNode): {
   return { primary: fallbackEmail ?? '—', secondary: null };
 }
 
-export default async function OfficeShopifyOrdersPage() {
+export default async function OfficeShopifyOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ after?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect('/auth');
 
+  const { after } = await searchParams;
   const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN?.trim();
 
   if (!isShopifyAdminEnvConfigured()) {
@@ -96,10 +108,17 @@ export default async function OfficeShopifyOrdersPage() {
 
   let errorMessage: string | null = null;
   let orders: ShopifyOrderNode[] = [];
+  let hasNextPage = false;
+  let endCursor: string | null = null;
 
   try {
-    const data = await fetchShopifyOrdersPageFromEnv({ first: 25 });
+    const data = await fetchShopifyOrdersPageFromEnv({
+      first: PAGE_SIZE,
+      after: after ?? null,
+    });
     orders = data.orders.edges.map((e) => e.node);
+    hasNextPage = data.orders.pageInfo.hasNextPage;
+    endCursor = data.orders.pageInfo.endCursor;
   } catch (e) {
     errorMessage = e instanceof Error ? e.message : 'Failed to load orders';
   }
@@ -184,10 +203,14 @@ export default async function OfficeShopifyOrdersPage() {
                         {formatShopifyDate(o.createdAt)}
                       </td>
                       <td className="p-2 align-middle">
-                        {o.displayFinancialStatus ?? '—'}
+                        {formatShopifyOrderDisplayFinancialStatus(
+                          o.displayFinancialStatus,
+                        )}
                       </td>
                       <td className="p-2 align-middle">
-                        {o.displayFulfillmentStatus ?? '—'}
+                        {formatShopifyOrderDisplayFulfillmentStatus(
+                          o.displayFulfillmentStatus,
+                        )}
                       </td>
                       <td className="p-2 text-right align-middle tabular-nums">
                         {formatOrderMoney(o)}
@@ -200,6 +223,29 @@ export default async function OfficeShopifyOrdersPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between mt-3">
+            {after ? (
+              <Link
+                href="/order/office/shopify-orders"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                &larr; First page
+              </Link>
+            ) : (
+              <div />
+            )}
+            {hasNextPage && endCursor ? (
+              <Link
+                href={`/order/office/shopify-orders?after=${encodeURIComponent(endCursor)}`}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Next page &rarr;
+              </Link>
+            ) : (
+              <div />
+            )}
           </div>
         </>
       )}

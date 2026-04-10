@@ -13,8 +13,8 @@ export default async function HomePage() {
     case 'active':
       redirect(
         getCanSeeBudgetAndReports(session.user.role)
-          ? '/dashboard/cost'
-          : '/delivery',
+          ? '/dashboard'
+          : '/order',
       );
     case 'pending_approval':
       redirect('/waiting');
