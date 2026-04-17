@@ -9,11 +9,11 @@ import type { Prisma } from '@prisma/client';
 import type { ShopifyOrderDisplayFulfillmentStatus } from '@/types/shopify';
 import type {
   OfficePurchaseOrderBlock,
-  PoLineItemView,
   PoPanelMeta,
   PurchaseOrderStatus,
   LinkedShopifyOrder,
 } from '../types';
+import { sortPoLineItemsByProductTitleAsc } from '../utils/sort-lines-by-product-title';
 
 // ─── Prisma payload types ─────────────────────────────────────────────────────
 
@@ -105,31 +105,33 @@ export function mapPrismaPoToBlock(
     return 'UNFULFILLED';
   }
 
-  const lineItems: PoLineItemView[] = po.lineItems.map((li) => {
-    const soli = li.shopifyOrderLineItem;
-    const srcOrder = soli ? orderById.get(soli.orderId) : undefined;
-    return {
-      id: li.id,
-      purchaseOrderId: li.purchaseOrderId,
-      sequence: li.sequence,
-      quantity: li.quantity,
-      quantityReceived: li.quantityReceived,
-      supplierRef: li.supplierRef,
-      sku: li.sku,
-      variantTitle: li.variantTitle,
-      productTitle: li.productTitle,
-      imageUrl: soli?.imageUrl ?? null,
-      isCustom: li.isCustom,
-      itemPrice: decimalToString(li.itemPrice),
-      shopifyOrderLineItemId: soli?.id ?? null,
-      shopifyLineItemGid: soli?.shopifyGid ?? null,
-      shopifyVariantGid: li.shopifyVariantGid ?? soli?.variantGid ?? null,
-      shopifyProductGid: li.shopifyProductGid ?? null,
-      shopifyOrderId: srcOrder?.id ?? firstOrder?.id ?? null,
-      shopifyOrderNumber: srcOrder?.name ?? firstOrderName,
-      fulfillmentStatus: lineFulfillmentStatus(li),
-    };
-  });
+  const lineItems = sortPoLineItemsByProductTitleAsc(
+    po.lineItems.map((li) => {
+      const soli = li.shopifyOrderLineItem;
+      const srcOrder = soli ? orderById.get(soli.orderId) : undefined;
+      return {
+        id: li.id,
+        purchaseOrderId: li.purchaseOrderId,
+        sequence: li.sequence,
+        quantity: li.quantity,
+        quantityReceived: li.quantityReceived,
+        supplierRef: li.supplierRef,
+        sku: li.sku,
+        variantTitle: li.variantTitle,
+        productTitle: li.productTitle,
+        imageUrl: soli?.imageUrl ?? null,
+        isCustom: li.isCustom,
+        itemPrice: decimalToString(li.itemPrice),
+        shopifyOrderLineItemId: soli?.id ?? null,
+        shopifyLineItemGid: soli?.shopifyGid ?? null,
+        shopifyVariantGid: li.shopifyVariantGid ?? soli?.variantGid ?? null,
+        shopifyProductGid: li.shopifyProductGid ?? null,
+        shopifyOrderId: srcOrder?.id ?? firstOrder?.id ?? null,
+        shopifyOrderNumber: srcOrder?.name ?? firstOrderName,
+        fulfillmentStatus: lineFulfillmentStatus(li),
+      };
+    }),
+  );
 
   const orderDates = linkedOrders
     .map((o) => o.processedAt ?? o.shopifyCreatedAt)

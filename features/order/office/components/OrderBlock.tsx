@@ -51,7 +51,9 @@ type Props = {
   inclusions?: boolean[];
   onToggleInclude?: (orderId: string, itemIdx: number) => void;
   onSeparatePo?: (payload: SeparatePoPayload) => void;
-  onArchive?: () => void;
+  onArchiveShopifyOrder?: (shopifyOrderDbId: string) => void;
+  showArchived?: boolean;
+  onUnarchiveShopifyOrder?: (shopifyOrderDbId: string) => void;
   /** When saving from a PO context, pass PO id so server can resync lines. */
   purchaseOrderId?: string | null;
 };
@@ -88,7 +90,9 @@ export function OrderBlock({
   inclusions,
   onToggleInclude,
   onSeparatePo,
-  onArchive,
+  onArchiveShopifyOrder,
+  showArchived,
+  onUnarchiveShopifyOrder,
   purchaseOrderId,
 }: Props) {
   const router = useRouter();
@@ -431,6 +435,17 @@ export function OrderBlock({
                 {saving ? 'Saving…' : 'Save'}
               </Button>
             </>
+          ) : showArchived ? (
+            onUnarchiveShopifyOrder ? (
+              <Button
+                variant="outline"
+                size="xs"
+                className="text-[10px] rounded-[5px]"
+                onClick={() => void onUnarchiveShopifyOrder(order.id)}
+              >
+                Unarchive
+              </Button>
+            ) : null
           ) : (
             <>
               <Button
@@ -463,7 +478,11 @@ export function OrderBlock({
             onSeparatePo(payload);
             setDialogOpen(false);
           }}
-          onArchive={onArchive}
+          onArchive={
+            onArchiveShopifyOrder
+              ? () => onArchiveShopifyOrder(order.id)
+              : undefined
+          }
         />
       )}
 

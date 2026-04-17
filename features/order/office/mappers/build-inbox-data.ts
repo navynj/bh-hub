@@ -4,8 +4,9 @@
  * Groups POs by **ShopifyCustomer** (DB-based, not runtime API), builds sidebar
  * structure + per-supplier view data, and computes status tab counts.
  *
- * Without-PO orders are grouped by line-item vendor → supplier (via
- * ShopifyVendorMapping) rather than a single "Without PO" bucket.
+ * Without-PO orders are grouped by **line-item** vendor → supplier (via
+ * `ShopifyVendorMapping`). A single Shopify order may appear under multiple
+ * supplier rows (one slice per supplier), each showing only that supplier’s lines.
  *
  * All data comes from the DB — no live Shopify API calls needed.
  */
@@ -26,6 +27,7 @@ import type {
   CustomerAddress,
 } from '../types';
 import type { Prisma } from '@prisma/client';
+import { sortPrePoLineDraftsByProductTitleAsc } from '../utils/sort-lines-by-product-title';
 
 // ─── DB payload types ─────────────────────────────────────────────────────────
 
@@ -104,49 +106,6 @@ function buildSidebarDates(pos: PrismaPoWithRelations[]): string {
   }
 
   return parts.length > 0 ? parts.join(' · ') : 'PO created';
-}
-
-// ─── Shopify order → draft mapping ───────────────────────────────────────────
-
-function shopifyOrderToDraft(
-  order: ShopifyOrderWithCustomer,
-): ShopifyOrderDraft {
-  const customer = order.customer;
-  const orderEmail = order.email ?? customer?.email ?? null;
-  const primaryLabel = customer
-    ? (() => {
-        const { name } = resolveCustomerFields(customer);
-        if (name !== 'Unknown') return name;
-        return orderEmail?.trim() ?? null;
-      })()
-    : orderEmail?.trim() ?? null;
-
-  return {
-    id: order.id,
-    shopifyOrderGid: order.shopifyGid,
-    currencyCode: order.currencyCode ?? null,
-    orderNumber: order.name ?? order.id,
-    customerEmail: customer?.email ?? order.email ?? null,
-    customerPhone: customer?.phone ?? null,
-    shippingAddressLine: flattenShippingAddress(order.shippingAddress),
-    customerDisplayName: primaryLabel,
-    orderedAt:
-      order.processedAt?.toISOString() ??
-      order.shopifyCreatedAt?.toISOString() ??
-      null,
-    lineItems: order.lineItems.map((li) => ({
-      shopifyLineItemId: li.id,
-      shopifyLineItemGid: li.shopifyGid,
-      shopifyVariantGid: li.variantGid,
-      sku: li.sku,
-      imageUrl: li.imageUrl ?? null,
-      productTitle: li.title ?? '(untitled)',
-      itemPrice: li.price ? String(li.price) : null,
-      itemCost: li.unitCost ? String(li.unitCost) : null,
-      quantity: li.quantity,
-      includeInPo: true,
-    })),
-  };
 }
 
 type ShippingJson = {
@@ -299,36 +258,89 @@ function buildVendorLookup(
 ): Map<string, string> {
   const map = new Map<string, string>();
   for (const m of vendorMappings) {
-    map.set(m.vendorName, m.supplierId);
+    const k = m.vendorName.trim();
+    if (k) map.set(k, m.supplierId);
   }
   return map;
 }
 
-/**
- * Resolve the primary supplier ID for an unlinked order by looking at the
- * majority vendor among its line items.
- */
-function resolveOrderSupplierId(
-  order: ShopifyOrderWithCustomer,
+function supplierIdForLineItem(
+  li: ShopifyOrderWithCustomer['lineItems'][number],
   vendorLookup: Map<string, string>,
 ): string {
-  const counts = new Map<string, number>();
+  const vendor = li.vendor?.trim();
+  if (!vendor) return UNASSIGNED_SUPPLIER_ID;
+  return vendorLookup.get(vendor) ?? UNASSIGNED_SUPPLIER_ID;
+}
+
+/** One bucket per supplier that appears on the order (plus unassigned if any line has no / unknown vendor). */
+function distinctSupplierIdsForOrder(
+  order: ShopifyOrderWithCustomer,
+  vendorLookup: Map<string, string>,
+): string[] {
+  if (order.lineItems.length === 0) return [UNASSIGNED_SUPPLIER_ID];
+  const set = new Set<string>();
   for (const li of order.lineItems) {
-    const vendor = li.vendor;
-    if (!vendor) continue;
-    const supId = vendorLookup.get(vendor) ?? UNASSIGNED_SUPPLIER_ID;
-    counts.set(supId, (counts.get(supId) ?? 0) + li.quantity);
+    set.add(supplierIdForLineItem(li, vendorLookup));
   }
-  if (counts.size === 0) return UNASSIGNED_SUPPLIER_ID;
-  let best = UNASSIGNED_SUPPLIER_ID;
-  let bestQty = -1;
-  for (const [supId, qty] of counts) {
-    if (qty > bestQty) {
-      best = supId;
-      bestQty = qty;
-    }
-  }
-  return best;
+  return [...set];
+}
+
+// ─── Shopify order → draft mapping ───────────────────────────────────────────
+
+function shopifyOrderToDraft(
+  order: ShopifyOrderWithCustomer,
+  supplierBucketId: string,
+  vendorLookup: Map<string, string>,
+): ShopifyOrderDraft {
+  const customer = order.customer;
+  const orderEmail = order.email ?? customer?.email ?? null;
+  const primaryLabel = customer
+    ? (() => {
+        const { name } = resolveCustomerFields(customer);
+        if (name !== 'Unknown') return name;
+        return orderEmail?.trim() ?? null;
+      })()
+    : orderEmail?.trim() ?? null;
+
+  const rawLines =
+    supplierBucketId === UNASSIGNED_SUPPLIER_ID
+      ? order.lineItems.filter(
+          (li) => supplierIdForLineItem(li, vendorLookup) === UNASSIGNED_SUPPLIER_ID,
+        )
+      : order.lineItems.filter(
+          (li) => supplierIdForLineItem(li, vendorLookup) === supplierBucketId,
+        );
+
+  return {
+    id: order.id,
+    archivedAt: order.archivedAt ? order.archivedAt.toISOString() : null,
+    shopifyOrderGid: order.shopifyGid,
+    currencyCode: order.currencyCode ?? null,
+    orderNumber: order.name ?? order.id,
+    customerEmail: customer?.email ?? order.email ?? null,
+    customerPhone: customer?.phone ?? null,
+    shippingAddressLine: flattenShippingAddress(order.shippingAddress),
+    customerDisplayName: primaryLabel,
+    orderedAt:
+      order.processedAt?.toISOString() ??
+      order.shopifyCreatedAt?.toISOString() ??
+      null,
+    lineItems: sortPrePoLineDraftsByProductTitleAsc(
+      rawLines.map((li) => ({
+        shopifyLineItemId: li.id,
+        shopifyLineItemGid: li.shopifyGid,
+        shopifyVariantGid: li.variantGid,
+        sku: li.sku,
+        imageUrl: li.imageUrl ?? null,
+        productTitle: li.title ?? '(untitled)',
+        itemPrice: li.price ? String(li.price) : null,
+        itemCost: li.unitCost ? String(li.unitCost) : null,
+        quantity: li.quantity,
+        includeInPo: true,
+      })),
+    ),
+  };
 }
 
 // ─── Main builder ─────────────────────────────────────────────────────────────
@@ -399,13 +411,15 @@ export function buildInboxData(
       custInfoMap.set(custKey, identity);
     }
 
-    const supId = resolveOrderSupplierId(o, vendorLookup);
+    const supIds = distinctSupplierIdsForOrder(o, vendorLookup);
 
     if (!unlinkedByCustSup.has(custKey))
       unlinkedByCustSup.set(custKey, new Map());
     const supMap = unlinkedByCustSup.get(custKey)!;
-    if (!supMap.has(supId)) supMap.set(supId, []);
-    supMap.get(supId)!.push(o);
+    for (const supId of supIds) {
+      if (!supMap.has(supId)) supMap.set(supId, []);
+      supMap.get(supId)!.push(o);
+    }
   }
 
   // ── Collect all customer × supplier pairs ──
@@ -442,8 +456,10 @@ export function buildInboxData(
     for (const supId of allSupIds) {
       const pos = poSupMap.get(supId) ?? [];
       const draftOrders = draftSupMap.get(supId) ?? [];
+      const openDraftOrders = draftOrders.filter((o) => o.archivedAt == null);
       const hasPOs = pos.length > 0;
       const hasDrafts = draftOrders.length > 0;
+      const hasOpenDrafts = openDraftOrders.length > 0;
       if (!hasPOs && !hasDrafts) continue;
 
       const supplier =
@@ -456,7 +472,7 @@ export function buildInboxData(
           : (supplier?.company ?? 'Unknown Supplier');
       const entryKey: SupplierKey = `${custKey}::${supId}`;
 
-      const drafts = draftOrders.map((o) => shopifyOrderToDraft(o));
+      const drafts = draftOrders.map((o) => shopifyOrderToDraft(o, supId, vendorLookup));
 
       // ── Fulfillment stats (line rows — same as PoTable / mapPrismaPoToBlock panelMeta) ──
 
@@ -484,13 +500,16 @@ export function buildInboxData(
         allFulfilled && pos.length > 0 && pos.every((p) => p.completedAt != null);
 
       // ── Archive detection ──
+      // Row is archived only when every PO (if any) and every unlinked Shopify order in this slice are archived.
 
-      const isArchived = hasPOs
-        ? pos.every((p) => p.archivedAt != null)
-        : draftOrders.every((o) => o.archivedAt != null);
+      const allPosArchived = !hasPOs || pos.every((p) => p.archivedAt != null);
+      const allDraftsArchived =
+        !hasDrafts || draftOrders.every((o) => o.archivedAt != null);
+      const isArchived = allPosArchived && allDraftsArchived;
 
       const archivePurchaseOrderIds = hasPOs ? pos.map((p) => p.id) : [];
-      const archiveShopifyOrderIds = !hasPOs ? draftOrders.map((o) => o.id) : [];
+      /** Unlinked orders in this row — included even when the row has POs so bulk archive writes DB for every order. */
+      const archiveShopifyOrderIds = draftOrders.map((o) => o.id);
 
       // ── Status counting ──
 
@@ -507,7 +526,7 @@ export function buildInboxData(
             statusCounts.inbox++;
           }
         }
-        if (hasDrafts) {
+        if (hasOpenDrafts) {
           statusCounts.without_po++;
           if (!hasPOs) {
             statusCounts.inbox++;
@@ -524,9 +543,9 @@ export function buildInboxData(
       if (poCount > 0) {
         metaParts.push(`${poCount} PO${poCount !== 1 ? 's' : ''}`);
       }
-      if (drafts.length > 0) {
+      if (openDraftOrders.length > 0) {
         metaParts.push(
-          `${drafts.length} order${drafts.length !== 1 ? 's' : ''} without PO`,
+          `${openDraftOrders.length} order${openDraftOrders.length !== 1 ? 's' : ''} without PO`,
         );
       }
 
@@ -547,7 +566,7 @@ export function buildInboxData(
 
       const sidebarDates = hasPOs
         ? buildSidebarDates(pos)
-        : `${drafts.length} order${drafts.length !== 1 ? 's' : ''} without PO`;
+        : `${openDraftOrders.length} order${openDraftOrders.length !== 1 ? 's' : ''} without PO`;
 
       // ── Tab-specific date fields ──
 
@@ -615,7 +634,7 @@ export function buildInboxData(
         hasSms: supplier ? Boolean(supplier.contactPhone) : false,
         emailSent: false,
         sidebarDates,
-        withoutPoDraftCount: drafts.length,
+        withoutPoDraftCount: openDraftOrders.length,
         allFulfilled,
         allCompleted: allPosCompleted,
         latestOrderedAt: latestOrdered ? latestOrdered.toISOString().slice(0, 10) : null,
@@ -662,7 +681,8 @@ export function buildInboxData(
         key: entryKey,
         name: supplierName,
         poPills,
-        withoutPoCount: drafts.length > 0 ? drafts.length : undefined,
+        withoutPoCount:
+          openDraftOrders.length > 0 ? openDraftOrders.length : undefined,
       });
 
       // Track latest order date per supplier for sorting

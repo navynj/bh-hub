@@ -7,7 +7,6 @@ import { Sidebar } from '../components/Sidebar';
 import { CenterBar } from '../components/CenterBar';
 import { PrePoView } from '../components/PrePoView';
 import { PostPoView } from '../components/PostPoView';
-import { CommPanel } from '../components/CommPanel';
 import { MetaPanel } from '../components/MetaPanel';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
@@ -21,6 +20,7 @@ import type {
   ViewData,
   SidebarCustomerGroup,
   Period,
+  ShopifyOrderDraft,
 } from '../types';
 import type { CreatePoPayload } from '../components/MetaPanel';
 import type { SeparatePoPayload } from '../components/PrePoView';
@@ -37,6 +37,64 @@ const MAX_EXPECTED_DATE_CHIPS = 10;
 /** Sidebar (non-Inbox): expected-date sections per “page” of dates. */
 const EXPECTED_DATE_SIDEBAR_PAGE_SIZE = 5;
 
+/** `YYYY-MM-DD` from each without-PO draft under a supplier row (for period chips vs a single `latestOrderedAt`). */
+function shopifyDraftOrderedDaysForKey(
+  supplierKey: SupplierKey,
+  viewDataMap: Record<string, ViewData>,
+): Set<string> {
+  const vd = viewDataMap[supplierKey];
+  if (!vd) return new Set();
+  const drafts =
+    vd.type === 'pre'
+      ? vd.shopifyOrderDrafts
+      : (vd.shopifyOrderDrafts ?? []);
+  const days = new Set<string>();
+  for (const d of drafts) {
+    if (d.archivedAt) continue;
+    const day = d.orderedAt?.slice(0, 10);
+    if (day) days.add(day);
+  }
+  return days;
+}
+
+/** Merge server `viewDataMap` with pending archive/unarchive so list + chips update before refresh. */
+function mergeViewDataWithOptimisticDraftArchive(
+  viewDataMap: Record<string, ViewData>,
+  optimisticArchived: ReadonlySet<string>,
+  optimisticUnarchived: ReadonlySet<string>,
+): Record<string, ViewData> {
+  if (optimisticArchived.size === 0 && optimisticUnarchived.size === 0) {
+    return viewDataMap;
+  }
+  const stamp = new Date().toISOString();
+  const patchDraft = (d: ShopifyOrderDraft): ShopifyOrderDraft => {
+    const serverArchived = d.archivedAt ?? null;
+    let archivedAt = serverArchived;
+    if (optimisticUnarchived.has(d.id)) archivedAt = null;
+    else if (optimisticArchived.has(d.id)) archivedAt = stamp;
+    if (archivedAt === serverArchived) return d;
+    return { ...d, archivedAt };
+  };
+  let anyChange = false;
+  const out: Record<string, ViewData> = { ...viewDataMap };
+  for (const key of Object.keys(viewDataMap)) {
+    const vd = viewDataMap[key];
+    const drafts =
+      vd.type === 'pre'
+        ? vd.shopifyOrderDrafts
+        : (vd.shopifyOrderDrafts ?? []);
+    if (!drafts.length) continue;
+    const next = drafts.map(patchDraft);
+    if (!next.some((d, i) => d !== drafts[i])) continue;
+    anyChange = true;
+    out[key] =
+      vd.type === 'pre'
+        ? { ...vd, shopifyOrderDrafts: next }
+        : { ...vd, shopifyOrderDrafts: next };
+  }
+  return anyChange ? out : viewDataMap;
+}
+
 export type OrderManagementViewProps = {
   initialStates: Record<SupplierKey, SupplierEntry>;
   viewDataMap: Record<SupplierKey, ViewData>;
@@ -50,10 +108,11 @@ export function OrderManagementView({
   initialStates,
   viewDataMap,
   customerGroups,
-  statusTabCounts,
+  statusTabCounts: _statusTabCounts,
   defaultActiveKey,
   periods,
 }: OrderManagementViewProps) {
+  void _statusTabCounts;
   const [states, setStates] =
     useState<Record<SupplierKey, SupplierEntry>>(initialStates);
 
@@ -112,12 +171,37 @@ export function OrderManagementView({
   const [draftPoNumber, setDraftPoNumber] = useState('');
   const [poNumberIsManual, setPoNumberIsManual] = useState(false);
 
+  const [optimisticArchivedOrderIds, setOptimisticArchivedOrderIds] = useState(
+    () => new Set<string>(),
+  );
+  const [optimisticUnarchivedOrderIds, setOptimisticUnarchivedOrderIds] =
+    useState(() => new Set<string>());
+
+  useEffect(() => {
+    setOptimisticArchivedOrderIds(new Set());
+    setOptimisticUnarchivedOrderIds(new Set());
+  }, [viewDataMap]);
+
+  const patchedViewDataMap = useMemo(
+    () =>
+      mergeViewDataWithOptimisticDraftArchive(
+        viewDataMap,
+        optimisticArchivedOrderIds,
+        optimisticUnarchivedOrderIds,
+      ),
+    [viewDataMap, optimisticArchivedOrderIds, optimisticUnarchivedOrderIds],
+  );
+
   const currentDrafts = useMemo(() => {
-    const raw = viewDataMap[activeKey];
+    const raw = patchedViewDataMap[activeKey];
     if (!raw) return [];
-    if (raw.type === 'pre') return raw.shopifyOrderDrafts;
-    return raw.shopifyOrderDrafts ?? [];
-  }, [viewDataMap, activeKey]);
+    const list =
+      raw.type === 'pre'
+        ? raw.shopifyOrderDrafts
+        : (raw.shopifyOrderDrafts ?? []);
+    if (showArchived) return list;
+    return list.filter((d) => !d.archivedAt);
+  }, [patchedViewDataMap, activeKey, showArchived]);
 
   useEffect(() => {
     const inc: Record<string, boolean[]> = {};
@@ -199,7 +283,7 @@ export function OrderManagementView({
       const supplierId =
         parts.length >= 2 && parts[1] !== 'without-po' ? parts[1] : null;
 
-      const raw = viewDataMap[key];
+      const raw = patchedViewDataMap[key];
       const drafts =
         raw?.type === 'pre'
           ? raw.shopifyOrderDrafts
@@ -261,7 +345,7 @@ export function OrderManagementView({
         return { ok: false, reason: 'unknown' };
       }
     },
-    [states, viewDataMap, draftInclusions, effectivePoNumber, router],
+    [states, patchedViewDataMap, draftInclusions, effectivePoNumber, router],
   );
 
   const handleSeparatePo = useCallback(
@@ -367,13 +451,31 @@ export function OrderManagementView({
       const e = states[key];
       if (!e) return;
 
+      const snapshot = { ...e };
+      const shopifyIds = [...e.archiveShopifyOrderIds];
+
+      setOptimisticArchivedOrderIds((prev) => {
+        const next = new Set(prev);
+        for (const id of shopifyIds) next.add(id);
+        return next;
+      });
+      setOptimisticUnarchivedOrderIds((prev) => {
+        const next = new Set(prev);
+        for (const id of shopifyIds) next.delete(id);
+        return next;
+      });
+
       setStates((prev) => ({
         ...prev,
-        [key]: { ...prev[key], isArchived: true },
+        [key]: {
+          ...prev[key],
+          isArchived: true,
+          ...(shopifyIds.length > 0 ? { withoutPoDraftCount: 0 } : {}),
+        },
       }));
 
       try {
-        await fetch('/api/archive', {
+        const res = await fetch('/api/archive', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -388,12 +490,15 @@ export function OrderManagementView({
             archive: true,
           }),
         });
+        if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
         router.refresh();
       } catch (err) {
-        setStates((prev) => ({
-          ...prev,
-          [key]: { ...prev[key], isArchived: false },
-        }));
+        setStates((prev) => ({ ...prev, [key]: snapshot }));
+        setOptimisticArchivedOrderIds((prev) => {
+          const next = new Set(prev);
+          for (const id of shopifyIds) next.delete(id);
+          return next;
+        });
         console.error('Archive error:', err);
       }
     },
@@ -405,13 +510,39 @@ export function OrderManagementView({
       const e = states[key];
       if (!e) return;
 
+      const snapshot = { ...e };
+      const shopifyIds = [...e.archiveShopifyOrderIds];
+
+      const vd = viewDataMap[key];
+      const draftRestoreCount =
+        vd?.type === 'pre'
+          ? vd.shopifyOrderDrafts.length
+          : (vd?.shopifyOrderDrafts?.length ?? 0);
+
+      setOptimisticUnarchivedOrderIds((prev) => {
+        const next = new Set(prev);
+        for (const id of shopifyIds) next.add(id);
+        return next;
+      });
+      setOptimisticArchivedOrderIds((prev) => {
+        const next = new Set(prev);
+        for (const id of shopifyIds) next.delete(id);
+        return next;
+      });
+
       setStates((prev) => ({
         ...prev,
-        [key]: { ...prev[key], isArchived: false },
+        [key]: {
+          ...prev[key],
+          isArchived: false,
+          ...(draftRestoreCount > 0
+            ? { withoutPoDraftCount: draftRestoreCount }
+            : {}),
+        },
       }));
 
       try {
-        await fetch('/api/archive', {
+        const res = await fetch('/api/archive', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -426,16 +557,129 @@ export function OrderManagementView({
             archive: false,
           }),
         });
+        if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
         router.refresh();
       } catch (err) {
-        setStates((prev) => ({
-          ...prev,
-          [key]: { ...prev[key], isArchived: true },
-        }));
+        setStates((prev) => ({ ...prev, [key]: snapshot }));
+        setOptimisticUnarchivedOrderIds((prev) => {
+          const next = new Set(prev);
+          for (const id of shopifyIds) next.delete(id);
+          return next;
+        });
         console.error('Unarchive error:', err);
       }
     },
-    [states, router],
+    [states, router, viewDataMap],
+  );
+
+  /** Archive only this Shopify order (e.g. from Separate PO dialog), not the whole supplier row. */
+  const handleArchiveShopifyOrder = useCallback(
+    async (shopifyOrderDbId: string) => {
+      const key = activeKey;
+      const entryBefore = states[key];
+
+      setOptimisticArchivedOrderIds((prev) => new Set(prev).add(shopifyOrderDbId));
+      setOptimisticUnarchivedOrderIds((prev) => {
+        const n = new Set(prev);
+        n.delete(shopifyOrderDbId);
+        return n;
+      });
+
+      if (entryBefore) {
+        setStates((prev) => {
+          const e = prev[key];
+          if (!e) return prev;
+          const nextDraft = Math.max(0, e.withoutPoDraftCount - 1);
+          const onlyDrafts = !e.poCreated;
+          const rowFullyArchived = onlyDrafts && nextDraft === 0;
+          return {
+            ...prev,
+            [key]: {
+              ...e,
+              withoutPoDraftCount: nextDraft,
+              ...(rowFullyArchived ? { isArchived: true } : {}),
+            },
+          };
+        });
+      }
+
+      try {
+        const res = await fetch('/api/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shopifyOrderIds: [shopifyOrderDbId],
+            archive: true,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+        router.refresh();
+      } catch (err) {
+        setOptimisticArchivedOrderIds((prev) => {
+          const n = new Set(prev);
+          n.delete(shopifyOrderDbId);
+          return n;
+        });
+        if (entryBefore) {
+          setStates((prev) => ({ ...prev, [key]: { ...entryBefore } }));
+        }
+        console.error('Archive Shopify order error:', err);
+      }
+    },
+    [router, activeKey, states],
+  );
+
+  const handleUnarchiveShopifyOrder = useCallback(
+    async (shopifyOrderDbId: string) => {
+      const key = activeKey;
+      const entryBefore = states[key];
+
+      setOptimisticUnarchivedOrderIds((prev) => new Set(prev).add(shopifyOrderDbId));
+      setOptimisticArchivedOrderIds((prev) => {
+        const n = new Set(prev);
+        n.delete(shopifyOrderDbId);
+        return n;
+      });
+
+      if (entryBefore) {
+        setStates((prev) => {
+          const e = prev[key];
+          if (!e) return prev;
+          return {
+            ...prev,
+            [key]: {
+              ...e,
+              withoutPoDraftCount: e.withoutPoDraftCount + 1,
+              ...(!e.poCreated ? { isArchived: false } : {}),
+            },
+          };
+        });
+      }
+
+      try {
+        const res = await fetch('/api/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shopifyOrderIds: [shopifyOrderDbId],
+            archive: false,
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text().catch(() => res.statusText));
+        router.refresh();
+      } catch (err) {
+        setOptimisticUnarchivedOrderIds((prev) => {
+          const n = new Set(prev);
+          n.delete(shopifyOrderDbId);
+          return n;
+        });
+        if (entryBefore) {
+          setStates((prev) => ({ ...prev, [key]: { ...entryBefore } }));
+        }
+        console.error('Unarchive Shopify order error:', err);
+      }
+    },
+    [router, activeKey, states],
   );
 
   const [customFrom, setCustomFrom] = useState('');
@@ -582,7 +826,7 @@ export function OrderManagementView({
   }, []);
 
   const matchesPeriod = useCallback(
-    (e: SupplierEntry, period: PeriodKey): boolean => {
+    (supplierKey: SupplierKey, e: SupplierEntry, period: PeriodKey): boolean => {
       if (period === 'all') return true;
 
       if (showArchived && e.isArchived) {
@@ -605,6 +849,13 @@ export function OrderManagementView({
 
       if (period.startsWith('ordered_')) {
         const target = period.replace('ordered_', '');
+        if (activeStatusTab === 'inbox' || activeStatusTab === 'without_po') {
+          const draftDays = shopifyDraftOrderedDaysForKey(
+            supplierKey,
+            patchedViewDataMap,
+          );
+          return draftDays.has(target) || e.latestOrderedAt === target;
+        }
         return e.latestOrderedAt === target;
       }
 
@@ -622,12 +873,34 @@ export function OrderManagementView({
               (!customTo || ed <= customTo),
           );
         }
+        if (activeStatusTab === 'inbox' || activeStatusTab === 'without_po') {
+          for (const day of shopifyDraftOrderedDaysForKey(
+            supplierKey,
+            patchedViewDataMap,
+          )) {
+            if (
+              (!customFrom || day >= customFrom) &&
+              (!customTo || day <= customTo)
+            ) {
+              return true;
+            }
+          }
+          return false;
+        }
         const d = getDateForTab(e, activeStatusTab);
         if (!d) return false;
         return (!customFrom || d >= customFrom) && (!customTo || d <= customTo);
       }
       const p = tabPeriods.find((pp) => pp.id === period);
       if (!p) return true;
+      if (activeStatusTab === 'inbox' || activeStatusTab === 'without_po') {
+        for (const day of shopifyDraftOrderedDaysForKey(
+          supplierKey,
+          patchedViewDataMap,
+        )) {
+          if (day >= p.from && day <= p.to) return true;
+        }
+      }
       const d = getDateForTab(e, activeStatusTab);
       if (!d) return false;
       return d >= p.from && d <= p.to;
@@ -639,6 +912,7 @@ export function OrderManagementView({
       tabPeriods,
       activeStatusTab,
       getDateForTab,
+      patchedViewDataMap,
     ],
   );
 
@@ -651,7 +925,7 @@ export function OrderManagementView({
           if (!e) return false;
           return (
             matchesStatusTab(e, activeStatusTab) &&
-            matchesPeriod(e, activePeriod)
+            matchesPeriod(s.key, e, activePeriod)
           );
         }),
       }))
@@ -720,10 +994,13 @@ export function OrderManagementView({
     };
     const buckets = buildExpectedDateBuckets(
       filteredGroups,
-      viewDataMap,
+      patchedViewDataMap,
       bucketOpts,
     );
-    const fromNewest = pickFirstPoInNewestExpectedBucket(buckets, viewDataMap);
+    const fromNewest = pickFirstPoInNewestExpectedBucket(
+      buckets,
+      patchedViewDataMap,
+    );
     if (fromNewest) {
       setActiveKey(fromNewest.supplierKey);
       setSelectedPoBlockId(fromNewest.poId);
@@ -736,7 +1013,7 @@ export function OrderManagementView({
       return;
     }
     setActiveKey(first.key);
-    const raw = viewDataMap[first.key];
+    const raw = patchedViewDataMap[first.key];
     if (raw?.type === 'post' && raw.purchaseOrders.length > 0) {
       const skipNew = raw.purchaseOrders.filter((p) => p.id !== 'new');
       const pick = skipNew[0] ?? raw.purchaseOrders[0];
@@ -748,17 +1025,17 @@ export function OrderManagementView({
     activePeriod,
     showArchived,
     filteredGroups,
-    viewDataMap,
+    patchedViewDataMap,
   ]);
 
   /** Delivery-expected bucket for the selected PO — scopes sidebar highlight to one date section. */
   const selectionExpectedDateKey = useMemo(() => {
     if (!selectedPoBlockId || selectedPoBlockId === '__drafts__') return null;
-    const vd = viewDataMap[activeKey];
+    const vd = patchedViewDataMap[activeKey];
     if (!vd || vd.type !== 'post') return null;
     const po = vd.purchaseOrders.find((p) => p.id === selectedPoBlockId);
     return expectedDateKeyFromPo(po?.panelMeta?.expectedDate ?? null);
-  }, [activeKey, selectedPoBlockId, viewDataMap]);
+  }, [activeKey, selectedPoBlockId, patchedViewDataMap]);
 
   /** Inbox tab (without draft archive view): customer-first sidebar. Else: expected-date buckets. */
   const useInboxCustomerLayout =
@@ -769,11 +1046,17 @@ export function OrderManagementView({
     const onlyKey = activePeriod.startsWith('expected_')
       ? activePeriod.replace('expected_', '')
       : null;
-    return buildExpectedDateBuckets(filteredGroups, viewDataMap, {
+    return buildExpectedDateBuckets(filteredGroups, patchedViewDataMap, {
       onlyExpectedDateKey: onlyKey,
       bucketStyle: showArchived ? 'ordered' : 'delivery_expected',
     });
-  }, [useInboxCustomerLayout, filteredGroups, viewDataMap, activePeriod, showArchived]);
+  }, [
+    useInboxCustomerLayout,
+    filteredGroups,
+    patchedViewDataMap,
+    activePeriod,
+    showArchived,
+  ]);
 
   useEffect(() => {
     if (useInboxCustomerLayout || !activePeriod.startsWith('expected_')) return;
@@ -854,7 +1137,7 @@ export function OrderManagementView({
 
   const entry = states[activeKey] ?? null;
 
-  const rawViewData = entry ? viewDataMap[activeKey] : undefined;
+  const rawViewData = entry ? patchedViewDataMap[activeKey] : undefined;
 
   const viewData: ViewData =
     entry?.poCreated && rawViewData?.type === 'pre'
@@ -868,7 +1151,9 @@ export function OrderManagementView({
               currency: 'CAD',
               isAuto: false,
               title: 'Items for PO',
-              shopifyOrderCount: rawViewData.shopifyOrderDrafts.length,
+              shopifyOrderCount: rawViewData.shopifyOrderDrafts.filter(
+                (d) => !d.archivedAt,
+              ).length,
               lineItems: [],
             },
           ],
@@ -877,13 +1162,14 @@ export function OrderManagementView({
 
   useEffect(() => {
     if (!entry) return;
-    const raw = viewDataMap[activeKey];
+    const raw = patchedViewDataMap[activeKey];
     if (!raw) return;
 
-    const draftCount =
+    const draftList =
       raw.type === 'pre'
-        ? raw.shopifyOrderDrafts.length
-        : (raw.shopifyOrderDrafts?.length ?? 0);
+        ? raw.shopifyOrderDrafts
+        : (raw.shopifyOrderDrafts ?? []);
+    const draftCount = draftList.filter((d) => !d.archivedAt).length;
 
     if (
       draftCount > 0 &&
@@ -905,7 +1191,8 @@ export function OrderManagementView({
                 currency: 'CAD',
                 isAuto: false,
                 title: 'Items for PO',
-                shopifyOrderCount: raw.shopifyOrderDrafts.length,
+                shopifyOrderCount: draftList.filter((d) => !d.archivedAt)
+                  .length,
                 lineItems: [],
               },
             ],
@@ -924,7 +1211,7 @@ export function OrderManagementView({
       if (stillValid) return prev;
       return vd.purchaseOrders[0].id;
     });
-  }, [activeKey, activeStatusTab, entry?.poCreated, viewDataMap, entry]);
+  }, [activeKey, activeStatusTab, entry?.poCreated, patchedViewDataMap, entry]);
 
   let selectedPoPanelMeta: PoPanelMeta | undefined;
   if (viewData.type === 'post' && selectedPoBlockId) {
@@ -988,7 +1275,7 @@ export function OrderManagementView({
           onExpectedDatePageChange={setExpectedDateSidebarPage}
           activeKey={activeKey}
           states={states}
-          viewDataMap={viewDataMap}
+          viewDataMap={patchedViewDataMap}
           onSelect={setActiveKey}
           selectedPoBlockId={selectedPoBlockId}
           selectionExpectedDateKey={selectionExpectedDateKey}
@@ -1022,7 +1309,9 @@ export function OrderManagementView({
                     inclusions={draftInclusions}
                     onToggleInclude={handleToggleInclude}
                     onSeparatePo={handleSeparatePo}
-                    onArchive={() => handleArchive(activeKey)}
+                    showArchived={showArchived}
+                    onArchiveShopifyOrder={handleArchiveShopifyOrder}
+                    onUnarchiveShopifyOrder={handleUnarchiveShopifyOrder}
                     purchaseOrderId={
                       (
                         viewData.purchaseOrders.find((p) => p.id !== 'new') ??
@@ -1036,7 +1325,9 @@ export function OrderManagementView({
                     inclusions={draftInclusions}
                     onToggleInclude={handleToggleInclude}
                     onSeparatePo={handleSeparatePo}
-                    onArchive={() => handleArchive(activeKey)}
+                    showArchived={showArchived}
+                    onArchiveShopifyOrder={handleArchiveShopifyOrder}
+                    onUnarchiveShopifyOrder={handleUnarchiveShopifyOrder}
                   />
                 ) : (
                   <PostPoView
